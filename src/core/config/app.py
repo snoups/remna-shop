@@ -19,6 +19,7 @@ from .log import LogConfig
 from .redis import RedisConfig
 from .remnawave import RemnawaveConfig
 from .validators import validate_not_change_me
+from .webhook import OutboundWebhookConfig
 
 
 class AppConfig(BaseConfig, env_prefix="APP_"):
@@ -43,6 +44,7 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     email: EmailConfig = Field(default_factory=EmailConfig)
+    webhook: OutboundWebhookConfig = Field(default_factory=OutboundWebhookConfig)
     build: BuildConfig = Field(default_factory=BuildConfig)
     log: LogConfig = Field(default_factory=LogConfig)
 

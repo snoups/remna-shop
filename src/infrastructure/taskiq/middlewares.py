@@ -19,6 +19,17 @@ class ErrorMiddleware(TaskiqMiddleware):
     ) -> None:
         logger.error(f"Task '{message.task_name}' error: {exception}")
 
+        # For retryable tasks, notify admins only after the final attempt
+        # (SmartRetryMiddleware increments '_retries' the same way before comparing).
+        if str(message.labels.get("retry_on_error", "")).lower() in ("true", "1"):
+            retries = int(message.labels.get("_retries", 0)) + 1
+            max_retries = int(message.labels.get("max_retries", 5))
+            if retries < max_retries:
+                logger.warning(
+                    f"Task '{message.task_name}' will be retried ({retries}/{max_retries})"
+                )
+                return
+
         container: Optional[AsyncContainer] = self.broker.custom_dependency_context.get(
             AsyncContainer
         )

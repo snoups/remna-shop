@@ -9,6 +9,7 @@ from .health import HealthService
 from .http_client import AiohttpClient
 from .notification import NotificationService
 from .notification_queue import NotificationQueue, NotificationWorker
+from .outbound_webhook import OutboundWebhookSender, OutboundWebhookService
 from .password_hasher import PasswordHasherImpl
 from .redirect import RedirectImpl
 from .remnawave import RemnawaveImpl
@@ -29,6 +30,8 @@ __all__ = [
     "NotificationService",
     "NotificationQueue",
     "NotificationWorker",
+    "OutboundWebhookSender",
+    "OutboundWebhookService",
     "PasswordHasherImpl",
     "PaymentNotificationDispatcherImpl",
     "RedirectImpl",
