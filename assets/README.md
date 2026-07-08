@@ -58,6 +58,16 @@ This means:
 - Your overrides in `custom.ftl` are never touched by updates.
 - To override any built-in key, add it to `custom.ftl` with your translation.
 
+## Adding a new locale from your volume
+
+A locale that ships with the bot lives in `assets.default/translations/{locale}/` and only needs a `custom.ftl` for overrides. A locale that is **not** shipped can be added entirely from your user volume — no image rebuild required:
+
+1. Create `assets/translations/{locale}/` (e.g. `assets/translations/en/`).
+2. Put the full set of `*.ftl` files there (`buttons.ftl`, `messages.ftl`, `events.ftl`, `notifications.ftl`, `utils.ftl`, and optionally `custom.ftl`).
+3. Add the locale to `APP_LOCALES` and, if needed, `APP_DEFAULT_LOCALE`.
+
+The bot scans both `assets.default/translations/` and `assets/translations/`, so a locale present only in your volume is loaded in full. The locale code must exist in `Locale` (`/remnashop/src/core/enums.py`).
+
 ## Translation configuration
 
 * **`APP_LOCALES`**: Supported locales (e.g. `ru,en`).
