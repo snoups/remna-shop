@@ -31,7 +31,6 @@ class LayeredFileStorage(BaseStorage):
         )
 
     def _load_translations(self) -> None:
-        # Local dev fallback: assets.default/ not present — behave like FileStorage
         if not self._default_dir.exists():
             for locale_dir in self._user_dir.iterdir():
                 if not locale_dir.is_dir():
@@ -44,23 +43,39 @@ class LayeredFileStorage(BaseStorage):
                     self.add_translator(translator)
             return
 
-        for locale_dir in self._default_dir.iterdir():
-            if not locale_dir.is_dir():
+        locales: set[str] = set()
+        for base_dir in (self._default_dir, self._user_dir):
+            if not base_dir.exists():
                 continue
-            locale = locale_dir.name
+            for locale_dir in base_dir.iterdir():
+                if locale_dir.is_dir():
+                    locales.add(locale_dir.name)
 
-            # Load all default .ftl files
-            default_texts = [f.read_text("utf8") for f in sorted(locale_dir.rglob("*.ftl"))]
-            if default_texts:
-                translator = self._make_translator(locale, default_texts)
-                self._default_translators[locale] = translator
-                self.add_translator(translator)
+        for locale in sorted(locales):
+            default_locale_dir = self._default_dir / locale
+            user_locale_dir = self._user_dir / locale
 
-            # Load user's custom.ftl (optional)
-            custom_ftl = self._user_dir / locale / "custom.ftl"
-            if custom_ftl.exists():
-                text = custom_ftl.read_text("utf8")
-                self._custom_translators[locale] = self._make_translator(locale, [text])
+            if default_locale_dir.exists():
+                default_texts = [
+                    f.read_text("utf8") for f in sorted(default_locale_dir.rglob("*.ftl"))
+                ]
+                if default_texts:
+                    translator = self._make_translator(locale, default_texts)
+                    self._default_translators[locale] = translator
+                    self.add_translator(translator)
+
+                custom_ftl = user_locale_dir / "custom.ftl"
+                if custom_ftl.exists():
+                    text = custom_ftl.read_text("utf8")
+                    self._custom_translators[locale] = self._make_translator(locale, [text])
+            else:
+                user_texts = [
+                    f.read_text("utf8") for f in sorted(user_locale_dir.rglob("*.ftl"))
+                ]
+                if user_texts:
+                    translator = self._make_translator(locale, user_texts)
+                    self._default_translators[locale] = translator
+                    self.add_translator(translator)
 
     def get_translators_for_language(self, language: str) -> list[FluentTranslator]:
         locale_chain = self._locales_map.get(language, (language,))
