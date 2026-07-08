@@ -14,7 +14,7 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
-from src.application.common import BotService, TranslatorRunner
+from src.application.common import BotService, TranslatorHub
 from src.application.common.dao import UserDao
 from src.core.constants import INLINE_QUERY_INVITE
 
@@ -27,7 +27,7 @@ async def handle_inline_query(
     inline_query: InlineQuery,
     user_dao: FromDishka[UserDao],
     bot_service: FromDishka[BotService],
-    i18n: FromDishka[TranslatorRunner],
+    translator_hub: FromDishka[TranslatorHub],
 ) -> None:
     user = await user_dao.get_by_telegram_id(inline_query.from_user.id)
 
@@ -38,6 +38,11 @@ async def handle_inline_query(
         return
 
     logger.info(f"{user.log} Sent inline query {INLINE_QUERY_INVITE}")
+
+    # Inline queries do not pass through UserMiddleware, so the request-scoped
+    # TranslatorRunner falls back to the default locale. Resolve the translator
+    # from the user's own language instead.
+    i18n = translator_hub.get_translator_by_locale(user.language)
 
     result_id = hashlib.md5(inline_query.query.strip().encode()).hexdigest()
     referral_url = await bot_service.get_referral_url(user.referral_code)
