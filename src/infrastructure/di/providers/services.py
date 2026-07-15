@@ -32,6 +32,8 @@ from src.infrastructure.services import (
     NotificationQueue,
     NotificationService,
     NotificationWorker,
+    OutboundWebhookSender,
+    OutboundWebhookService,
     PasswordHasherImpl,
     PaymentNotificationDispatcherImpl,
     RedirectImpl,
@@ -60,6 +62,9 @@ class ServicesProvider(Provider):
 
     command = provide(source=CommandService)
     webhook = provide(source=WebhookService)
+
+    outbound_webhook = provide(source=OutboundWebhookService)
+    outbound_webhook_sender = provide(source=OutboundWebhookSender)
 
     remnawave = provide(source=RemnawaveImpl, provides=Remnawave)
     remna_webhook = provide(source=RemnaWebhookService, scope=Scope.REQUEST)
