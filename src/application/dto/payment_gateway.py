@@ -143,6 +143,20 @@ class RoboKassaGatewaySettingsDto(GatewaySettingsDto):
     merchant_login: Optional[str] = None
     password1: Optional[SecretStr] = None
     password2: Optional[SecretStr] = None
+    # Test mode adds IsTest=1 and signs with the project's separate TEST passwords
+    # (Robokassa dashboard → "Технические настройки"), so payments can be tested
+    # before the shop is activated.
+    test_mode: bool = False
+    test_password1: Optional[SecretStr] = None
+    test_password2: Optional[SecretStr] = None
+
+    @property
+    def is_configured(self) -> bool:
+        if self.merchant_login is None:
+            return False
+        if self.test_mode:
+            return self.test_password1 is not None and self.test_password2 is not None
+        return self.password1 is not None and self.password2 is not None
 
 
 @dataclass(kw_only=True)

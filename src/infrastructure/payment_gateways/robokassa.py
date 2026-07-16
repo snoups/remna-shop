@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from decimal import Decimal
 from hmac import compare_digest
-from typing import Any, Final, Union
+from typing import Any, Final, Union, cast
 from urllib.parse import parse_qs, urlencode
 from uuid import UUID
 
@@ -86,24 +86,38 @@ class RobokassaGateway(BasePaymentGateway):
 
         return dict(request.query_params)
 
+    def _settings(self) -> RoboKassaGatewaySettingsDto:
+        return cast(RoboKassaGatewaySettingsDto, self.data.settings)
+
+    def _is_test(self) -> bool:
+        return self._settings().test_mode
+
+    def _password(self, *, first: bool) -> str:
+        # Test mode signs with the separate TEST passwords; production with the main ones.
+        settings = self._settings()
+        if settings.test_mode:
+            pwd = settings.test_password1 if first else settings.test_password2
+        else:
+            pwd = settings.password1 if first else settings.password2
+        if pwd is None:
+            raise ValueError("Robokassa password is not configured")
+        return pwd.get_secret_value()
+
     def _sign_payment(
         self,
         out_sum: str,
         inv_id: int,
         shp_params: dict[str, str],
     ) -> str:
-        merchant_login = self.data.settings.merchant_login  # type: ignore[union-attr]
-
-        password1 = self.data.settings.password1.get_secret_value()  # type: ignore[union-attr]
-
-        if not merchant_login or not password1:
-            raise ValueError("merchant_login and password1 are required")
+        merchant_login = self._settings().merchant_login
+        if not merchant_login:
+            raise ValueError("merchant_login is required")
 
         parts: list[str] = [
             merchant_login,
             out_sum,
             str(inv_id),
-            password1,
+            self._password(first=True),
         ]
         parts.extend(f"{k}={shp_params[k]}" for k in sorted(shp_params))
         return self._hash(":".join(parts))
@@ -117,7 +131,7 @@ class RobokassaGateway(BasePaymentGateway):
         parts = [
             out_sum,
             inv_id,
-            self.data.settings.password2.get_secret_value(),  # type: ignore[union-attr]
+            self._password(first=False),
         ]
         parts.extend(f"{k}={shp_params[k]}" for k in sorted(shp_params))
         return self._hash(":".join(parts))
@@ -159,7 +173,7 @@ class RobokassaGateway(BasePaymentGateway):
         shp_params: dict[str, str],
     ) -> str:
         params: dict[str, Any] = {
-            "MerchantLogin": self.data.settings.merchant_login,  # type: ignore[union-attr]
+            "MerchantLogin": self._settings().merchant_login,
             "OutSum": out_sum,
             "InvId": inv_id,
             "Description": description,
@@ -168,6 +182,8 @@ class RobokassaGateway(BasePaymentGateway):
             "Encoding": "utf-8",
             **shp_params,
         }
+        if self._is_test():
+            params["IsTest"] = 1
 
         return f"{self.PAYMENT_URL}?{urlencode(params)}"
 
