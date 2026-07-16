@@ -166,6 +166,23 @@ class ValutixGatewaySettingsDto(GatewaySettingsDto):
     api_key: Optional[SecretStr] = None
 
 
+@dataclass(kw_only=True)
+class UnitPayGatewaySettingsDto(GatewaySettingsDto):
+    type: Literal[PaymentGatewayType.UNITPAY] = PaymentGatewayType.UNITPAY
+    public_key: Optional[str] = None
+    secret_key: Optional[SecretStr] = None
+    # When True, requests carry test=1 and must use the project's TEST secret key.
+    test_mode: bool = False
+    # Fiscal receipt (54-ФЗ): set `vat` (none/vat0/vat10/vat20/...) to attach a
+    # receipt; UnitPay delivers it to `customer_email` when provided.
+    vat: Optional[str] = None
+    customer_email: Optional[str] = None
+
+    @property
+    def is_configured(self) -> bool:
+        return self.public_key is not None and self.secret_key is not None
+
+
 AnyGatewaySettingsDto = Union[
     TelegramStarsGatewaySettingsDto,
     YooKassaGatewaySettingsDto,
@@ -181,4 +198,5 @@ AnyGatewaySettingsDto = Union[
     UrlPayGatewaySettingsDto,
     WataGatewaySettingsDto,
     ValutixGatewaySettingsDto,
+    UnitPayGatewaySettingsDto,
 ]

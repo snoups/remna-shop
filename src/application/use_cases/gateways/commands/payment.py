@@ -39,6 +39,7 @@ from src.application.dto.payment_gateway import (
     PlategaGatewaySettingsDto,
     RoboKassaGatewaySettingsDto,
     TelegramStarsGatewaySettingsDto,
+    UnitPayGatewaySettingsDto,
     UrlPayGatewaySettingsDto,
     ValutixGatewaySettingsDto,
     WataGatewaySettingsDto,
@@ -105,6 +106,7 @@ class CreateDefaultPaymentGateway(Interactor[None, None]):
                     PaymentGatewayType.URLPAY: UrlPayGatewaySettingsDto,
                     PaymentGatewayType.VALUTIX: ValutixGatewaySettingsDto,
                     PaymentGatewayType.WATA: WataGatewaySettingsDto,
+                    PaymentGatewayType.UNITPAY: UnitPayGatewaySettingsDto,
                 }
                 dto_class = settings_map.get(gateway_type)
                 settings = dto_class() if dto_class else None

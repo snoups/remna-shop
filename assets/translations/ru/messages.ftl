@@ -1096,6 +1096,11 @@ msg-gateways-field =
 
     Введите новое значение для { $field ->
         [display_name] отображаемого названия
+        [test_mode] режима работы — впишите <code>true</code> для тестового режима (нужен тестовый секретный ключ) или <code>false</code> для боевого
+        [public_key] публичного ключа
+        [secret_key] секретного ключа
+        [vat] ставки НДС для чека — впишите одно из: <code>none</code> (без НДС), <code>vat0</code>, <code>vat5</code>, <code>vat7</code>, <code>vat10</code>, <code>vat20</code>
+        [customer_email] email для отправки чека покупателю
        *[other] { $field }
     }.
 
