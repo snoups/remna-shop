@@ -17,6 +17,7 @@ from loguru import logger
 from src.application.dto import PaymentGatewayDto, PaymentResultDto
 from src.application.dto.payment_gateway import UnitPayGatewaySettingsDto
 from src.core.config import AppConfig
+from src.core.constants import API_V1, UNITPAY_PAY_PATH
 from src.core.enums import TransactionStatus
 
 from .base import BasePaymentGateway
@@ -58,16 +59,23 @@ class UnitPayGateway(BasePaymentGateway):
         self._secret_key = settings.secret_key.get_secret_value()
         self._test_mode = settings.test_mode
         self._vat = settings.vat
-        self._customer_email = settings.customer_email
 
         self._client = self._make_client(base_url=self.API_BASE)
 
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResultDto:
+        # The UnitPay payment is created only after the user enters an email on the
+        # hosted page (create_hosted_payment); here we just mint the order id and
+        # point the Pay button at that page. Contract (amount/details) is untouched.
         order_id = uuid.uuid4()
+        return PaymentResultDto(id=order_id, url=self._hosted_page_url(order_id))
+
+    async def create_hosted_payment(
+        self, account: UUID, amount: Decimal, desc: str, customer_email: str
+    ) -> str:
         # `test` and `secretKey` are NOT part of the signature; everything else is.
         signed = {
-            "account": str(order_id),
-            "desc": details[:128],
+            "account": str(account),
+            "desc": desc[:128],
             "paymentType": self.PAYMENT_TYPE,
             "projectId": self._project_id,
             "sum": self._format_amount(amount),
@@ -79,20 +87,19 @@ class UnitPayGateway(BasePaymentGateway):
         # cashItems / customerEmail are extra params — UnitPay does not sign them.
         if self._vat is not None:
             query["params[cashItems]"] = self._build_cash_items(signed["desc"], amount)
-            if self._customer_email:
-                query["params[customerEmail]"] = self._customer_email
+            query["params[customerEmail]"] = customer_email
         if self._test_mode:
             query["params[test]"] = "1"
         query["params[secretKey]"] = self._secret_key
         query["params[signature]"] = self._sign(signed, method=self.INIT_METHOD)
 
-        logger.debug(f"Creating UnitPay payment '{order_id}' (test={self._test_mode})")
+        logger.debug(f"Creating UnitPay payment '{account}' (test={self._test_mode})")
 
         try:
             response = await self._client.get("api", params=query)
             response.raise_for_status()
             data = orjson.loads(response.content)
-            return self._get_payment_data(order_id, data)
+            return self._extract_redirect_url(data)
 
         except HTTPStatusError as e:
             logger.error(
@@ -103,6 +110,10 @@ class UnitPayGateway(BasePaymentGateway):
         except (KeyError, orjson.JSONDecodeError) as e:
             logger.error(f"Failed to parse UnitPay response. Error: {e}")
             raise
+
+    def _hosted_page_url(self, order_id: UUID) -> str:
+        domain = self.config.domain.get_secret_value()
+        return f"https://{domain}{API_V1}{UNITPAY_PAY_PATH}/{order_id}"
 
     async def handle_webhook(self, request: Request) -> Union[tuple[UUID, TransactionStatus], None]:
         logger.debug(f"Received {self.__class__.__name__} webhook request")
@@ -130,7 +141,7 @@ class UnitPayGateway(BasePaymentGateway):
         # UnitPay treats any {"result": {"message": ...}} body as an acknowledgement.
         return JSONResponse({"result": {"message": "OK"}})
 
-    def _get_payment_data(self, order_id: UUID, data: dict[str, Any]) -> PaymentResultDto:
+    def _extract_redirect_url(self, data: dict[str, Any]) -> str:
         if "error" in data:
             message = data["error"].get("message", "unknown error")
             raise ValueError(f"UnitPay refused payment creation: {message}")
@@ -139,7 +150,7 @@ class UnitPayGateway(BasePaymentGateway):
         if not redirect_url:
             raise KeyError("Invalid UnitPay response: missing 'result.redirectUrl'")
 
-        return PaymentResultDto(id=order_id, url=str(redirect_url))
+        return str(redirect_url)
 
     def _parse_request(self, request: Request) -> tuple[str, dict[str, str]]:
         method = request.query_params.get("method", "")

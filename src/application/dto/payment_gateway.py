@@ -174,9 +174,8 @@ class UnitPayGatewaySettingsDto(GatewaySettingsDto):
     # When True, requests carry test=1 and must use the project's TEST secret key.
     test_mode: bool = False
     # Fiscal receipt (54-ФЗ): set `vat` (none/vat0/vat10/vat20/...) to attach a
-    # receipt; UnitPay delivers it to `customer_email` when provided.
+    # receipt. The delivery email is collected per-payment on the hosted page.
     vat: Optional[str] = None
-    customer_email: Optional[str] = None
 
     @property
     def is_configured(self) -> bool:

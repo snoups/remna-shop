@@ -16,6 +16,7 @@ from .endpoints import (
     payments_router,
     public_router,
     remnawave_router,
+    unitpay_pay_router,
 )
 
 
@@ -47,6 +48,7 @@ def get_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
     app.include_router(health_router)
     app.include_router(payments_router)
     app.include_router(remnawave_router)
+    app.include_router(unitpay_pay_router)
     if config.web_enabled:
         app.include_router(public_router)
 
