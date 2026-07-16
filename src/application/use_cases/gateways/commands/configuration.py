@@ -114,7 +114,10 @@ class UpdatePaymentGatewaySettings(Interactor[UpdatePaymentGatewaySettingsDto, N
                         f"Field '{data.field_name}' not found in {settings_type.__name__}"
                     )
 
-                new_value = self.retort.load(data.value, field_type)
+                if field_type is bool:
+                    new_value = self._parse_bool(data.value)
+                else:
+                    new_value = self.retort.load(data.value, field_type)
                 setattr(gateway.settings, data.field_name, new_value)
 
                 await self.gateway_dao.update(gateway)
@@ -127,6 +130,17 @@ class UpdatePaymentGatewaySettings(Interactor[UpdatePaymentGatewaySettingsDto, N
             except ValueError as e:
                 logger.warning(f"{actor.log} Invalid value for field '{data.field_name}': {e}")
                 raise
+
+    @staticmethod
+    def _parse_bool(value: str) -> bool:
+        # The retort uses strict_coercion=False, which coerces ANY non-empty
+        # string (including "false"/"0") to True; parse booleans explicitly.
+        normalized = value.strip().lower()
+        if normalized in ("true", "1", "yes", "on"):
+            return True
+        if normalized in ("false", "0", "no", "off", ""):
+            return False
+        raise ValueError(f"Invalid boolean value: {value!r}")
 
 
 @dataclass(frozen=True)
