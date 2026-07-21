@@ -59,20 +59,33 @@ class UnitPayGateway(BasePaymentGateway):
         self._project_id = settings.public_key.split("-", 1)[0]
         self._secret_key = settings.secret_key.get_secret_value()
         self._test_mode = settings.test_mode
-        self._vat = settings.vat
+        # A fiscal receipt is attached only when a real VAT rate is set; `None` and
+        # the literal "none" both mean "no receipt" (and thus no email to collect).
+        vat = settings.vat
+        self._vat = vat if vat and vat.strip().lower() != "none" else None
         self._payment_type = settings.payment_type or self.PAYMENT_TYPE
 
         self._client = self._make_client(base_url=self.API_BASE)
 
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResultDto:
-        # The UnitPay payment is created only after the user enters an email on the
-        # hosted page (create_hosted_payment); here we just mint the order id and
-        # point the Pay button at that page. Contract (amount/details) is untouched.
         order_id = uuid.uuid4()
-        return PaymentResultDto(id=order_id, url=self._hosted_page_url(order_id))
+        # A fiscal receipt needs the buyer's email, which is collected on the hosted
+        # page before the payment is created (create_hosted_payment). Without a
+        # receipt there is nothing to collect, so create the payment now and point
+        # the Pay button straight at UnitPay. Contract (amount/details) is untouched.
+        if self._vat is not None:
+            return PaymentResultDto(id=order_id, url=self._hosted_page_url(order_id))
+
+        url = await self._init_payment(order_id, amount, details, customer_email=None)
+        return PaymentResultDto(id=order_id, url=url)
 
     async def create_hosted_payment(
         self, account: UUID, amount: Decimal, desc: str, customer_email: str
+    ) -> str:
+        return await self._init_payment(account, amount, desc, customer_email)
+
+    async def _init_payment(
+        self, account: UUID, amount: Decimal, desc: str, customer_email: Optional[str]
     ) -> str:
         # `test` and `secretKey` are NOT part of the signature; everything else is.
         signed = {
@@ -87,7 +100,7 @@ class UnitPayGateway(BasePaymentGateway):
         for key, value in signed.items():
             query[f"params[{key}]"] = value
         # cashItems / customerEmail are extra params — UnitPay does not sign them.
-        if self._vat is not None:
+        if self._vat is not None and customer_email is not None:
             query["params[cashItems]"] = self._build_cash_items(signed["desc"], amount)
             query["params[customerEmail]"] = customer_email
         if self._test_mode:
