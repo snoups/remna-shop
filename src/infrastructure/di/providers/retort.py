@@ -42,6 +42,7 @@ from src.application.dto.payment_gateway import (
     PlategaGatewaySettingsDto,
     RoboKassaGatewaySettingsDto,
     TelegramStarsGatewaySettingsDto,
+    UnitPayGatewaySettingsDto,
     UrlPayGatewaySettingsDto,
     ValutixGatewaySettingsDto,
     WataGatewaySettingsDto,
@@ -117,6 +118,7 @@ class RetortProvider(Provider):
                 PaymentGatewayType.URLPAY: UrlPayGatewaySettingsDto,
                 PaymentGatewayType.VALUTIX: ValutixGatewaySettingsDto,
                 PaymentGatewayType.WATA: WataGatewaySettingsDto,
+                PaymentGatewayType.UNITPAY: UnitPayGatewaySettingsDto,
             }
 
             dto_class = type_mapping.get(pg_type)

@@ -8,6 +8,7 @@ from .pay_master import PayMasterGateway
 from .platega import PlategaGateway
 from .robokassa import RobokassaGateway
 from .telegram_stars import TelegramStarsGateway
+from .unitpay import UnitPayGateway
 from .url_pay import UrlPayGateway
 from .valutix import ValutixGateway
 from .wata import WataGateway
@@ -26,6 +27,7 @@ __all__ = [
     "PlategaGateway",
     "RobokassaGateway",
     "TelegramStarsGateway",
+    "UnitPayGateway",
     "UrlPayGateway",
     "ValutixGateway",
     "WataGateway",

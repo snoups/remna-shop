@@ -18,6 +18,7 @@ from src.application.common.dao import (
     TransactionDao,
     UserDao,
 )
+from src.application.common.invoice import build_invoice_description
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import (
@@ -39,6 +40,7 @@ from src.application.dto.payment_gateway import (
     PlategaGatewaySettingsDto,
     RoboKassaGatewaySettingsDto,
     TelegramStarsGatewaySettingsDto,
+    UnitPayGatewaySettingsDto,
     UrlPayGatewaySettingsDto,
     ValutixGatewaySettingsDto,
     WataGatewaySettingsDto,
@@ -105,6 +107,7 @@ class CreateDefaultPaymentGateway(Interactor[None, None]):
                     PaymentGatewayType.URLPAY: UrlPayGatewaySettingsDto,
                     PaymentGatewayType.VALUTIX: ValutixGatewaySettingsDto,
                     PaymentGatewayType.WATA: WataGatewaySettingsDto,
+                    PaymentGatewayType.UNITPAY: UnitPayGatewaySettingsDto,
                 }
                 dto_class = settings_map.get(gateway_type)
                 settings = dto_class() if dto_class else None
@@ -163,13 +166,7 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
         gateway_instance = await self.get_payment_gateway_instance.system(data.gateway_type)
         i18n = self.translator_hub.get_translator_by_locale(actor.language)
 
-        key, kw = i18n_format_days(data.plan_snapshot.duration)
-        details = i18n.get(
-            "payment-invoice-description",
-            purchase_type=data.purchase_type,
-            name=i18n.get(data.plan_snapshot.name),
-            duration=i18n.get(key, **kw),
-        )
+        details = build_invoice_description(i18n, data.purchase_type, data.plan_snapshot)
 
         if data.pricing.is_free:
             async with self.uow:

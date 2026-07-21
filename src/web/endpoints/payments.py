@@ -135,3 +135,26 @@ async def payments_webhook(
         transaction_dao=transaction_dao,
         uow=uow,
     )
+
+
+# Some gateways (e.g. UnitPay) deliver notifications via GET.
+@router.get("/{gateway_type}")
+@inject
+async def payments_webhook_get(
+    gateway_type: str,
+    request: Request,
+    config: FromDishka[AppConfig],
+    event_publisher: FromDishka[EventPublisher],
+    get_payment_gateway_instance: FromDishka[GetPaymentGatewayInstance],
+    transaction_dao: FromDishka[TransactionDao],
+    uow: FromDishka[UnitOfWork],
+) -> Response:
+    return await _process_payment_webhook(
+        gateway_type=gateway_type,
+        request=request,
+        config=config,
+        event_publisher=event_publisher,
+        get_payment_gateway_instance=get_payment_gateway_instance,
+        transaction_dao=transaction_dao,
+        uow=uow,
+    )

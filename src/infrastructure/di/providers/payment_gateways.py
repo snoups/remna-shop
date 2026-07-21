@@ -21,6 +21,7 @@ from src.infrastructure.payment_gateways import (
     PlategaGateway,
     RobokassaGateway,
     TelegramStarsGateway,
+    UnitPayGateway,
     UrlPayGateway,
     ValutixGateway,
     WataGateway,
@@ -43,6 +44,7 @@ GATEWAY_MAP: dict[PaymentGatewayType, Type[BasePaymentGateway]] = {
     PaymentGatewayType.URLPAY: UrlPayGateway,
     PaymentGatewayType.VALUTIX: ValutixGateway,
     PaymentGatewayType.WATA: WataGateway,
+    PaymentGatewayType.UNITPAY: UnitPayGateway,
 }
 
 
