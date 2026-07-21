@@ -1100,6 +1100,7 @@ msg-gateways-field =
         [public_key] публичного ключа
         [secret_key] секретного ключа
         [vat] ставки НДС для чека — впишите одно из: <code>none</code> (без НДС), <code>vat0</code>, <code>vat5</code>, <code>vat7</code>, <code>vat10</code>, <code>vat20</code>
+        [payment_type] метода оплаты (код платежной системы UnitPay) — например <code>card</code>, <code>applepay</code>, <code>googlepay</code>, <code>sbp</code>, <code>qiwi</code>. По умолчанию <code>card</code>
        *[other] { $field }
     }.
 

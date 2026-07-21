@@ -35,6 +35,7 @@ class UnitPayGateway(BasePaymentGateway):
     # created via the initPayment API, which returns a ready-to-open redirectUrl.
     INIT_METHOD: Final[str] = "initPayment"
     # UnitPay requires an explicit payment method; the bare method-chooser form 404s.
+    # Used as the default when the gateway's `payment_type` setting is unset.
     PAYMENT_TYPE: Final[str] = "card"
     METHOD_PAY: Final[str] = "pay"
 
@@ -59,6 +60,7 @@ class UnitPayGateway(BasePaymentGateway):
         self._secret_key = settings.secret_key.get_secret_value()
         self._test_mode = settings.test_mode
         self._vat = settings.vat
+        self._payment_type = settings.payment_type or self.PAYMENT_TYPE
 
         self._client = self._make_client(base_url=self.API_BASE)
 
@@ -76,7 +78,7 @@ class UnitPayGateway(BasePaymentGateway):
         signed = {
             "account": str(account),
             "desc": desc[:128],
-            "paymentType": self.PAYMENT_TYPE,
+            "paymentType": self._payment_type,
             "projectId": self._project_id,
             "sum": self._format_amount(amount),
         }

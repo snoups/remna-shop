@@ -176,6 +176,10 @@ class UnitPayGatewaySettingsDto(GatewaySettingsDto):
     # Fiscal receipt (54-ФЗ): set `vat` (none/vat0/vat10/vat20/...) to attach a
     # receipt. The delivery email is collected per-payment on the hosted page.
     vat: Optional[str] = None
+    # UnitPay payment-system code (paymentType), e.g. card / applepay / googlepay /
+    # sbp / qiwi. Defaults to `card` in the gateway when unset.
+    # https://help.unitpay.ru/en/book-of-reference/payment-system-codes
+    payment_type: Optional[str] = None
 
     @property
     def is_configured(self) -> bool:
