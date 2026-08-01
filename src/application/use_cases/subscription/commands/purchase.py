@@ -53,37 +53,29 @@ class ActivateTrialSubscription(Interactor[ActivateTrialSubscriptionDto, None]):
 
         logger.info(f"{actor.log} Started trial for user '{user.id}'")
 
+        created_user = await self.remnawave.create_user(user, plan=plan)
+
+        trial_subscription = SubscriptionDto(
+            user_remna_id=created_user.uuid,
+            status=SubscriptionStatus(created_user.status),
+            is_trial=True,
+            traffic_limit=plan.traffic_limit,
+            device_limit=plan.device_limit,
+            traffic_limit_strategy=plan.traffic_limit_strategy,
+            tag=plan.tag,
+            internal_squads=plan.internal_squads,
+            external_squad=plan.external_squad,
+            expire_at=created_user.expire_at,
+            url=created_user.subscription_url,
+            plan_snapshot=plan,
+        )
+
         async with self.uow:
-            # Atomically claim the trial: on a double-click only one execution flips the flag,
-            # the loser gets claimed=False and aborts before creating a panel user or a duplicate
-            # subscription. Rolls back (restoring the flag) if remnawave creation fails.
-            claimed = await self.user_dao.claim_trial(user.id)
-            if not claimed:
-                raise TrialNotAvailableError(
-                    f"Trial already activated for user '{user.remna_name}'"
-                )
-
-            created_user = await self.remnawave.create_user(user, plan=plan)
-
-            trial_subscription = SubscriptionDto(
-                user_remna_id=created_user.uuid,
-                status=SubscriptionStatus(created_user.status),
-                is_trial=True,
-                traffic_limit=plan.traffic_limit,
-                device_limit=plan.device_limit,
-                traffic_limit_strategy=plan.traffic_limit_strategy,
-                tag=plan.tag,
-                internal_squads=plan.internal_squads,
-                external_squad=plan.external_squad,
-                expire_at=created_user.expire_at,
-                url=created_user.subscription_url,
-                plan_snapshot=plan,
-            )
-
             await self.subscription_dao.create(
                 subscription=trial_subscription,
                 user_id=user.id,
             )
+            await self.user_dao.set_trial_available(user.id, False)
             await self.uow.commit()
 
         logger.debug(f"{actor.log} Created new trial subscription for user '{user.id}'")
@@ -154,7 +146,10 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                     user_id=user.id,
                 )
                 await self.user_dao.set_trial_available(user.id, False)
-                if user.purchase_discount:
+                # Purchase discounts are never applied to trial plans
+                # (``apply_discount=not plan.is_trial`` on the pricing side),
+                # so a trial purchase must not consume the discount either.
+                if user.purchase_discount and not plan.is_trial:
                     user.purchase_discount = 0
                     await self.user_dao.update(user)
                 await self.uow.commit()
@@ -173,11 +168,7 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                 if duration == 0:
                     new_expire = days_to_datetime(duration)  # unlimited
                 else:
-                    base_date = (
-                        datetime_now()
-                        if subscription.grace_until is not None
-                        else max(subscription.expire_at, datetime_now())
-                    )
+                    base_date = max(subscription.expire_at, datetime_now())
                     new_expire = base_date + timedelta(days=duration)
 
                 subscription.expire_at = new_expire
@@ -187,7 +178,6 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                 subscription.tag = plan.tag
                 subscription.internal_squads = plan.internal_squads
                 subscription.external_squad = plan.external_squad
-                subscription.grace_until = None
 
                 await self.remnawave.update_user(
                     user=user,
@@ -198,7 +188,10 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
 
                 subscription.plan_snapshot = plan
                 await self.subscription_dao.update(subscription)
-                if user.purchase_discount:
+                # Purchase discounts are never applied to trial plans
+                # (``apply_discount=not plan.is_trial`` on the pricing side),
+                # so a trial purchase must not consume the discount either.
+                if user.purchase_discount and not plan.is_trial:
                     user.purchase_discount = 0
                     await self.user_dao.update(user)
                 await self.uow.commit()
@@ -229,7 +222,10 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                     user_id=user.id,
                 )
 
-                if user.purchase_discount:
+                # Purchase discounts are never applied to trial plans
+                # (``apply_discount=not plan.is_trial`` on the pricing side),
+                # so a trial purchase must not consume the discount either.
+                if user.purchase_discount and not plan.is_trial:
                     user.purchase_discount = 0
                     await self.user_dao.update(user)
                 await self.uow.commit()
