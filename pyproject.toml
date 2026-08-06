@@ -36,7 +36,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-remnapy = { git = "https://github.com/snoups/remnapy", rev = "95e15ed" }
+remnapy = { git = "https://github.com/snoups/remnapy", rev = "0680253" }
 
 [project.urls]
 homepage = "https://t.me/@remna_shop"
