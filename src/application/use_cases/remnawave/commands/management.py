@@ -8,10 +8,26 @@ from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.common.remnawave import Remnawave
 from src.application.common.uow import UnitOfWork
-from src.application.dto import UserDto
+from src.application.dto import SubscriptionDto, UserDto
 from src.application.events import UserAllDevicesDeletedEvent
 from src.core.exceptions import CooldownError, PermissionDeniedError
 from src.core.utils.time import datetime_now
+
+
+async def _reissue_subscription_and_refresh_url(
+    remnawave: Remnawave,
+    subscription: SubscriptionDto,
+    user_id: int,
+) -> None:
+    await remnawave.revoke_subscription(subscription.user_remna_id)
+    remna_user = await remnawave.get_user_by_uuid(subscription.user_remna_id)
+    if not remna_user:
+        raise ValueError(
+            f"Remnawave user '{subscription.user_remna_id}' not found after "
+            f"subscription reissue for user '{user_id}'"
+        )
+    subscription.url = remna_user.subscription_url
+    subscription.link_reset_at = datetime_now()
 
 
 @dataclass(frozen=True)
@@ -204,8 +220,9 @@ class ReissueSubscription(Interactor[None, None]):
                 raise CooldownError(available_at)
 
         async with self.uow:
-            await self.remnawave.revoke_subscription(current_subscription.user_remna_id)
-            current_subscription.link_reset_at = datetime_now()
+            await _reissue_subscription_and_refresh_url(
+                self.remnawave, current_subscription, actor.id
+            )
             await self.subscription_dao.update(current_subscription)
             await self.uow.commit()
 
@@ -216,11 +233,16 @@ class ReissueUserSubscription(Interactor[int, None]):
     required_permission = Permission.USER_EDITOR
 
     def __init__(
-        self, user_dao: UserDao, subscription_dao: SubscriptionDao, remnawave: Remnawave
+        self,
+        user_dao: UserDao,
+        subscription_dao: SubscriptionDao,
+        remnawave: Remnawave,
+        uow: UnitOfWork,
     ) -> None:
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
+        self.uow = uow
 
     async def _execute(self, actor: UserDto, user_id: int) -> None:
         target_user = await self.user_dao.get_by_id(user_id)
@@ -232,6 +254,11 @@ class ReissueUserSubscription(Interactor[int, None]):
         if not current_subscription:
             raise ValueError(f"No active subscription for user '{target_user.remna_name}'")
 
-        await self.remnawave.revoke_subscription(current_subscription.user_remna_id)
+        async with self.uow:
+            await _reissue_subscription_and_refresh_url(
+                self.remnawave, current_subscription, target_user.id
+            )
+            await self.subscription_dao.update(current_subscription)
+            await self.uow.commit()
 
         logger.info(f"{actor.log} Reissued subscription for user '{target_user.id}'")
