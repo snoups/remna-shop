@@ -350,6 +350,7 @@ gateway-type = { $gateway_type ->
     [FREEKASSA] FreeKassa
     [MULENPAY] MulenPay
     [PAYMASTER] PayMaster
+    [PAY_2328] 2328.io Crypto
     [PLATEGA] Platega
     [ROBOKASSA] RoboKassa
     [URLPAY] UrlPay

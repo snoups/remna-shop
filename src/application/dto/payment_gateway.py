@@ -32,6 +32,7 @@ class PaymentGatewayDto(BaseDto, TrackableMixin):
             PaymentGatewayType.HELEKET,
             PaymentGatewayType.FREEKASSA,
             PaymentGatewayType.PAYMASTER,
+            PaymentGatewayType.PAY_2328,
         }
 
 
@@ -166,6 +167,14 @@ class ValutixGatewaySettingsDto(GatewaySettingsDto):
     api_key: Optional[SecretStr] = None
 
 
+@dataclass(kw_only=True)
+class Pay2328GatewaySettingsDto(GatewaySettingsDto):
+    type: Literal[PaymentGatewayType.PAY_2328] = PaymentGatewayType.PAY_2328
+    project_uuid: Optional[str] = None
+    api_key: Optional[SecretStr] = None
+    ttl_seconds: int = 3600
+
+
 AnyGatewaySettingsDto = Union[
     TelegramStarsGatewaySettingsDto,
     YooKassaGatewaySettingsDto,
@@ -181,4 +190,5 @@ AnyGatewaySettingsDto = Union[
     UrlPayGatewaySettingsDto,
     WataGatewaySettingsDto,
     ValutixGatewaySettingsDto,
+    Pay2328GatewaySettingsDto,
 ]

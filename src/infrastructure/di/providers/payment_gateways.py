@@ -16,6 +16,7 @@ from src.infrastructure.payment_gateways import (
     FreeKassaGateway,
     HeleketGateway,
     MulenPayGateway,
+    Pay2328Gateway,
     PayMasterGateway,
     PaymentGatewayFactory,
     PlategaGateway,
@@ -43,6 +44,7 @@ GATEWAY_MAP: dict[PaymentGatewayType, Type[BasePaymentGateway]] = {
     PaymentGatewayType.URLPAY: UrlPayGateway,
     PaymentGatewayType.VALUTIX: ValutixGateway,
     PaymentGatewayType.WATA: WataGateway,
+    PaymentGatewayType.PAY_2328: Pay2328Gateway,
 }
 
 
