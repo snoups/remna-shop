@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html
 import string
 import traceback
 from dataclasses import asdict
@@ -76,6 +77,22 @@ from src.telegram.keyboards import (
     get_user_keyboard,
 )
 from src.telegram.widgets import extract_color, extract_tg_emoji
+
+
+def _escape_html_template_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return html.escape(value)
+    if isinstance(value, dict):
+        return {key: _escape_html_template_value(nested) for key, nested in value.items()}
+    if isinstance(value, list):
+        return [_escape_html_template_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_escape_html_template_value(item) for item in value)
+    return value
+
+
+def _escape_html_template_kwargs(i18n_kwargs: dict[str, Any]) -> dict[str, Any]:
+    return {key: _escape_html_template_value(value) for key, value in i18n_kwargs.items()}
 
 
 class NotificationService(Notifier):
@@ -267,7 +284,7 @@ class NotificationService(Notifier):
         text = self._get_translated_text(
             locale=locale,
             i18n_key=payload.i18n_key,
-            i18n_kwargs=payload.i18n_kwargs,
+            i18n_kwargs=_escape_html_template_kwargs(payload.i18n_kwargs),
         )
 
         reply_markup = (
@@ -360,10 +377,10 @@ class NotificationService(Notifier):
             logger.debug(f"Skipping notification for web-only user {user.log}")
             return None
 
-        render_kwargs = payload.i18n_kwargs.copy()
+        render_kwargs = _escape_html_template_kwargs(payload.i18n_kwargs)
 
         if isinstance(user, UserDto) and payload.i18n_key == "raw-message":
-            user_data = asdict(user)
+            user_data = _escape_html_template_kwargs(asdict(user))
             render_kwargs = {**user_data, **payload.i18n_kwargs}
 
         reply_markup = self._prepare_reply_markup(
