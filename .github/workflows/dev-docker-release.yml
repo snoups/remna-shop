@@ -106,6 +106,9 @@ jobs:
           zip -r remnashop-dev.zip . \
             -x ".git/*" ".github/*" "logs/*" "*.zip" "node_modules/*"
 
+      - name: 📦 Ensure Dev Release Exists
+        run: gh release create dev-build --title "Dev Build" --notes "Development build" --latest=false || true
+
       - name: 🧹 Remove Previous Artifact
         continue-on-error: true
         run: gh release delete-asset dev-build remnashop-dev.zip || true
