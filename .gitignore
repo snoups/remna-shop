@@ -49,6 +49,5 @@ site/
 frontend/
 # Local deployment / fork-only assets (not for upstream)
 docker-compose.yml
-assets/banners/
 assets/translations/ru/.legacy/
 assets/translations/ru/custom.ftl.example
