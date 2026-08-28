@@ -40,7 +40,7 @@ class CheckSubscriptionSyncState(Interactor[int, bool]):
 
         remna_user = None
         if bot_sub:
-            remna_user = await self.remnawave.get_user_by_uuid(bot_sub.user_remna_id)
+            remna_user = await self.remnawave.get_user_by_id(bot_sub.user_remna_id)
         elif target_user.telegram_id:
             remna_users = await self.remnawave.get_users_by_telegram_id(target_user.telegram_id)
             remna_user = remna_users[0] if remna_users else None
@@ -96,7 +96,7 @@ class SyncSubscriptionFromRemnawave(Interactor[int, None]):
                 logger.info(f"{actor.log} Imported subscription from panel for user '{user_id}'")
                 return
 
-            remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
+            remna_user = await self.remnawave.get_user_by_id(subscription.user_remna_id)
 
             if not remna_user:
                 await self.subscription_dao.update_status(
@@ -148,18 +148,18 @@ class SyncSubscriptionFromRemnashop(Interactor[int, None]):
                         target_user.telegram_id
                     )
                     if remna_users:
-                        await self.remnawave.delete_user(remna_users[0].uuid)
+                        await self.remnawave.delete_user(remna_users[0].id)
                         logger.info(
-                            f"{actor.log} Deleted user '{remna_users[0].uuid}' from remnapy "
+                            f"{actor.log} Deleted user '{remna_users[0].id}' from remnapy "
                             f"due to missing local subscription"
                         )
             else:
-                remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
+                remna_user = await self.remnawave.get_user_by_id(subscription.user_remna_id)
 
                 if remna_user:
                     await self.remnawave.update_user(
                         user=target_user,
-                        uuid=subscription.user_remna_id,
+                        user_id=subscription.user_remna_id,
                         subscription=subscription,
                     )
                     logger.info(

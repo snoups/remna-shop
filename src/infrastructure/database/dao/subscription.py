@@ -66,7 +66,7 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
         logger.debug(f"Subscription '{subscription_id}' not found")
         return None
 
-    async def get_by_remna_id(self, user_remna_id: UUID) -> Optional[SubscriptionDto]:
+    async def get_by_remna_id(self, user_remna_id: int) -> Optional[SubscriptionDto]:
         stmt = select(Subscription).where(Subscription.user_remna_id == user_remna_id)
         db_subscription = await self.session.scalar(stmt)
 
@@ -156,7 +156,7 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
         logger.warning(f"Failed to update subscription '{subscription_id}': not found")
         return None
 
-    async def exists(self, user_remna_id: UUID) -> bool:
+    async def exists(self, user_remna_id: int) -> bool:
         stmt = select(
             select(Subscription).where(Subscription.user_remna_id == user_remna_id).exists()
         )

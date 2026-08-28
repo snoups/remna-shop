@@ -142,7 +142,7 @@ async def get_current_subscription(
     if not current_subscription:
         return None
 
-    remna_user = await remnawave.get_user_by_uuid(current_subscription.user_remna_id)
+    remna_user = await remnawave.get_user_by_id(current_subscription.user_remna_id)
 
     return SubscriptionInfoResponse(
         user_remna_id=str(current_subscription.user_remna_id),

@@ -109,7 +109,7 @@ class GetUserProfileSubscription(Interactor[int, GetUserProfileSubscriptionResul
         if not subscription:
             raise ValueError(f"Current subscription for user '{user_id}' not found")
 
-        remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
+        remna_user = await self.remnawave.get_user_by_id(subscription.user_remna_id)
         if not remna_user:
             raise ValueError(f"User Remnawave for '{user_id}' not found")
 

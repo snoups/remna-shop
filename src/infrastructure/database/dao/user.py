@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, cast
-from uuid import UUID
 
 from adaptix import Retort
 from adaptix.conversion import ConversionRetort
@@ -63,19 +62,19 @@ class UserDaoImpl(UserDao):
         logger.debug(f"User '{telegram_id}' not found")
         return None
 
-    async def get_by_remna_uuid(self, remna_uuid: UUID) -> Optional[UserDto]:
+    async def get_by_remna_id(self, remna_id: int) -> Optional[UserDto]:
         stmt = (
             select(User)
             .join(Subscription, User.current_subscription_id == Subscription.id)
-            .where(Subscription.user_remna_id == remna_uuid)
+            .where(Subscription.user_remna_id == remna_id)
         )
         db_user = await self.session.scalar(stmt)
 
         if db_user:
-            logger.debug(f"User with remna_uuid '{remna_uuid}' found in database")
+            logger.debug(f"User with remna_id '{remna_id}' found in database")
             return self._convert_to_dto(db_user)
 
-        logger.debug(f"User with remna_uuid '{remna_uuid}' not found")
+        logger.debug(f"User with remna_id '{remna_id}' not found")
         return None
 
     async def get_by_email(self, email: str) -> Optional[UserDto]:

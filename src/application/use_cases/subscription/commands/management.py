@@ -141,7 +141,7 @@ class UpdateTrafficLimit(Interactor[UpdateTrafficLimitDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                user_id=subscription.user_remna_id,
                 subscription=subscription,
             )
 
@@ -187,7 +187,7 @@ class UpdateDeviceLimit(Interactor[UpdateDeviceLimitDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                user_id=subscription.user_remna_id,
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -239,7 +239,7 @@ class ToggleInternalSquad(Interactor[ToggleInternalSquadDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                user_id=subscription.user_remna_id,
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -290,7 +290,7 @@ class ToggleExternalSquad(Interactor[ToggleExternalSquadDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                user_id=subscription.user_remna_id,
                 subscription=subscription,
             )
             await self.uow.commit()
@@ -338,7 +338,7 @@ class AddSubscriptionDuration(Interactor[AddSubscriptionDurationDto, None]):
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
-                uuid=subscription.user_remna_id,
+                user_id=subscription.user_remna_id,
                 subscription=subscription,
             )
 

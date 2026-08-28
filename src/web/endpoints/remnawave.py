@@ -6,10 +6,10 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from loguru import logger
 from remnapy.controllers import WebhookUtility
 from remnapy.models.webhook import (
-    NodeDto,
     TorrentBlockerReportDto,
     UserDto,
     UserHwidDeviceEventDto,
+    WebhookNodeDto,
 )
 
 from src.application.common import EventPublisher
@@ -58,7 +58,7 @@ async def _process_remnawave_webhook(
             )
 
         elif WebhookUtility.is_node_event(payload.event):
-            node = cast(NodeDto, WebhookUtility.get_typed_data(payload))
+            node = cast(WebhookNodeDto, WebhookUtility.get_typed_data(payload))
             await remna_webhook_service.handle_node_event(payload.event, node)
 
         elif WebhookUtility.is_torrent_blocker_event(payload.event):

@@ -3,7 +3,7 @@ from enum import StrEnum
 
 from loguru import logger
 from redis.asyncio import Redis
-from remnapy.models.webhook import HwidUserDeviceDto, NodeDto, TorrentBlockerReportDto
+from remnapy.models.webhook import HwidUserDeviceDto, TorrentBlockerReportDto, WebhookNodeDto
 
 from src.application.common import BotService, EventPublisher
 from src.application.common.dao import SubscriptionDao, UserDao
@@ -77,9 +77,9 @@ class RemnaWebhookService:
             await self._process_sync(event, remna_user)
             return
 
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+        user = await self.user_dao.get_by_remna_id(remna_user.id)
         if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+            logger.warning(f"Local user not found for remna_id '{remna_user.id}'")
             return
 
         current_subscription = await self.subscription_dao.get_current(user.id)
@@ -128,7 +128,7 @@ class RemnaWebhookService:
                     name=user.name,
                     email=user.email,
                     is_trial=current_subscription.is_trial,
-                    subscription_id=remna_user.uuid,
+                    subscription_id=remna_user.id,
                     subscription_status=SubscriptionStatus(remna_user.status),
                     traffic_used=i18n_format_bytes_to_unit(
                         remna_user.used_traffic_bytes, min_unit=ByteUnitKey.MEGABYTE
@@ -144,11 +144,11 @@ class RemnaWebhookService:
     async def handle_device_event(
         self, event: str, remna_user: RemnaUserDto, device: HwidUserDeviceDto
     ) -> None:
-        logger.info(f"Received device event '{event}' for RemnaUser '{remna_user.uuid}'")
+        logger.info(f"Received device event '{event}' for RemnaUser '{remna_user.id}'")
 
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+        user = await self.user_dao.get_by_remna_id(remna_user.id)
         if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+            logger.warning(f"Local user not found for remna_id '{remna_user.id}'")
             return
 
         if event == RemnaUserHwidDevicesEvent.ADDED:
@@ -182,7 +182,7 @@ class RemnaWebhookService:
                 )
             )
 
-    async def handle_node_event(self, event: str, node: NodeDto) -> None:
+    async def handle_node_event(self, event: str, node: WebhookNodeDto) -> None:
         logger.info(f"Received node event '{event}' for node '{node.name}'")
 
         if event not in {
@@ -271,9 +271,9 @@ class RemnaWebhookService:
         )
 
     async def _process_not_connected(self, remna_user: RemnaUserDto) -> None:
-        user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+        user = await self.user_dao.get_by_remna_id(remna_user.id)
         if not user:
-            logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
+            logger.warning(f"Local user not found for remna_id '{remna_user.id}'")
             return
         support_url = f"{T_ME}{self.config.bot.support_username.get_secret_value()}"
         await self.event_bus.publish(UserNotConnectedEvent(user=user, support_url=support_url))
@@ -291,7 +291,7 @@ class RemnaWebhookService:
         remna_user = report.user
         telegram_id = remna_user.telegram_id
         user_identifier = (
-            str(telegram_id) if telegram_id else (action_report.user_id or str(remna_user.uuid))
+            str(telegram_id) if telegram_id else (action_report.user_id or str(remna_user.id))
         )
         node_name = report.node.name
         blocked_ip = action_report.ip
@@ -362,11 +362,11 @@ class RemnaWebhookService:
 
     async def _process_delete_subscription(self, remna_user: RemnaUserDto) -> None:
         async with self.uow:
-            subscription = await self.subscription_dao.get_by_remna_id(remna_user.uuid)
+            subscription = await self.subscription_dao.get_by_remna_id(remna_user.id)
 
             if not subscription:
                 logger.warning(
-                    f"Subscription not found for UUID '{remna_user.uuid}', delete aborted"
+                    f"Subscription not found for ID '{remna_user.id}', delete aborted"
                 )
                 return
 
@@ -387,7 +387,7 @@ class RemnaWebhookService:
                     await self.user_dao.clear_current_subscription(user_id)
 
             await self.uow.commit()
-            logger.info(f"Successfully processed deletion for subscription '{remna_user.uuid}'")
+            logger.info(f"Successfully processed deletion for subscription '{remna_user.id}'")
 
     async def _process_status(
         self,
@@ -437,7 +437,7 @@ class RemnaWebhookService:
                     name=user.name,
                     email=user.email,
                     is_trial=current_subscription.is_trial,
-                    subscription_id=remna_user.uuid,
+                    subscription_id=remna_user.id,
                     subscription_status=SubscriptionStatus(remna_user.status),
                     traffic_used=i18n_format_bytes_to_unit(
                         remna_user.used_traffic_bytes, min_unit=ByteUnitKey.MEGABYTE

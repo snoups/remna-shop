@@ -44,13 +44,13 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         remna_user = data.remna_user
 
         async with self.uow:
-            user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+            user = await self.user_dao.get_by_remna_id(remna_user.id)
 
             if not user and remna_user.telegram_id:
                 user = await self.user_dao.get_by_telegram_id(remna_user.telegram_id)
 
             if not user and data.creating:
-                logger.debug(f"User '{remna_user.uuid}' not found in bot, creating new user")
+                logger.debug(f"User '{remna_user.id}' not found in bot, creating new user")
 
                 async def persist(referral_code: str) -> UserDto:
                     return await self.user_dao.create(
@@ -67,7 +67,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
 
             if not user:
                 logger.warning(
-                    f"Sync failed: user '{remna_user.uuid}' could not be found or created"
+                    f"Sync failed: user '{remna_user.id}' could not be found or created"
                 )
                 return False
 
@@ -93,7 +93,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         return UserDto(
             telegram_id=data.telegram_id,
             referral_code=referral_code,
-            name=str(data.telegram_id) if data.telegram_id else str(data.uuid),
+            name=str(data.telegram_id) if data.telegram_id else str(data.id),
             role=Role.USER,
             language=self.config.default_locale,
         )
@@ -125,7 +125,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         )
 
         subscription = SubscriptionDto(
-            user_remna_id=remna_subscription.uuid,
+            user_remna_id=remna_subscription.id,
             status=status,
             traffic_limit=plan.traffic_limit,
             device_limit=plan.device_limit,
@@ -185,12 +185,12 @@ class SyncAllUsersFromBot(Interactor[None, dict[str, int]]):
                     skipped += 1
                     continue
 
-                remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
+                remna_user = await self.remnawave.get_user_by_id(subscription.user_remna_id)
 
                 if remna_user:
                     updated_user = await self.remnawave.update_user(
                         user=user,
-                        uuid=subscription.user_remna_id,
+                        user_id=subscription.user_remna_id,
                         subscription=subscription,
                     )
                     if updated_user.subscription_url != subscription.url:
@@ -274,7 +274,7 @@ class SyncAllUsersFromPanel(Interactor[None, dict[str, int]]):
                 if remna_user.telegram_id:
                     user = bot_users_map.get(remna_user.telegram_id)
                 else:
-                    user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
+                    user = await self.user_dao.get_by_remna_id(remna_user.id)
 
                 if not user:
                     await self.sync_remna_user.system(SyncRemnaUserDto(remna_user, True))
@@ -293,7 +293,7 @@ class SyncAllUsersFromPanel(Interactor[None, dict[str, int]]):
 
             except Exception as exception:
                 logger.exception(
-                    f"Error syncing RemnaUser '{remna_user.uuid}' exception: {exception}"
+                    f"Error syncing RemnaUser '{remna_user.id}' exception: {exception}"
                 )
                 errors += 1
 

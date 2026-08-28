@@ -1,5 +1,4 @@
 from typing import Optional, Protocol, runtime_checkable
-from uuid import UUID
 
 from src.application.dto import UserDto
 from src.core.enums import Role
@@ -13,7 +12,7 @@ class UserDao(Protocol):
 
     async def get_by_telegram_id(self, telegram_id: int) -> Optional[UserDto]: ...
 
-    async def get_by_remna_uuid(self, remna_uuid: UUID) -> Optional[UserDto]: ...
+    async def get_by_remna_id(self, remna_id: int) -> Optional[UserDto]: ...
 
     async def get_by_email(self, email: str) -> Optional[UserDto]: ...
 

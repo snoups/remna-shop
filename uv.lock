@@ -1078,8 +1078,8 @@ wheels = [
 
 [[package]]
 name = "remnapy"
-version = "2.7.1.dev4+g95e15ed2e"
-source = { git = "https://github.com/snoups/remnapy?rev=95e15ed#95e15ed2ea29aa62f112a8af790d6151f5db5fb1" }
+version = "3.2.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
@@ -1087,6 +1087,10 @@ dependencies = [
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-core" },
     { name = "rapid-api-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f0/4c/045dc496739a7707fefd34226321323ef2a28dec8b95a51e968c800d7ae4/remnapy-3.2.1.tar.gz", hash = "sha256:ceee26394019e653fa19d91ba802c7547e859e7478385c7e75ef1cfbef49841f", size = 182961, upload-time = "2026-08-06T12:11:59.245Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/e3/c12eaddeb341b922eb4dafae09e93e2947a266dee6516fadc79342ca22e5/remnapy-3.2.1-py3-none-any.whl", hash = "sha256:57b1033618bfd4e322d938cefec292bbea48b77670ab8fc56bcc5ae3119f9254", size = 96193, upload-time = "2026-08-06T12:11:57.952Z" },
 ]
 
 [[package]]
@@ -1152,7 +1156,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "qrcode", extras = ["pil"], specifier = ">=8.2" },
     { name = "redis", specifier = "~=7.0.0" },
-    { name = "remnapy", git = "https://github.com/snoups/remnapy?rev=95e15ed" },
+    { name = "remnapy", specifier = "==3.2.1" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "taskiq", extras = ["orjson"], specifier = "~=0.12.1" },
     { name = "taskiq-redis", specifier = "~=1.2.1" },
