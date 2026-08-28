@@ -23,7 +23,7 @@ from .base import BaseEvent, SystemEvent
 
 
 @dataclass(frozen=True, kw_only=True)
-class RemnashopWelcomeEvent(BaseEvent):
+class RemnatrishopWelcomeEvent(BaseEvent):
     notification_type: NotificationType = field(
         default=SystemNotificationType.SYSTEM,
         init=False,
@@ -34,7 +34,7 @@ class RemnashopWelcomeEvent(BaseEvent):
 
     @property
     def event_key(self) -> str:
-        return "event-remnashop-welcome"
+        return "event-remnatrishop-welcome"
 
     def as_payload(self) -> "MessagePayloadDto":
         return MessagePayloadDto(

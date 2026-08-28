@@ -229,7 +229,7 @@ def get_contact_support_keyboard(support_url: str) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_remnashop_keyboard() -> InlineKeyboardMarkup:
+def get_remnatrishop_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     builder.row(
@@ -254,7 +254,7 @@ def get_remnashop_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_remnashop_update_keyboard() -> InlineKeyboardMarkup:
+def get_remnatrishop_update_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
     builder.row(

@@ -538,7 +538,7 @@ msg-user-referrals = <b>👪 Рефералы пользователя</b>
 msg-user-sync = 
     <b>🌀 Синхронизировать пользователя</b>
 
-    <b>🛍 Remnashop</b>: { $bot_version }
+    <b>🛍 Remnatrishop</b>: { $bot_version }
     <blockquote>
     { $has_bot_subscription -> 
     [0] Данные отсутствуют
@@ -876,8 +876,8 @@ msg-remnawave-inbounds =
     }
 
 
-# RemnaShop
-msg-remnashop-main = <b>🛍 RemnaShop { $version ->
+# Remnatrishop
+msg-remnashop-main = <b>🛍 Remnatrishop { $version ->
 [0] { space }
 *[HAS] { $version }
 }</b>

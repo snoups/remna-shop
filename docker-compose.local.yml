@@ -4,9 +4,9 @@ x-build: &build
     dockerfile: Dockerfile.local
 
   volumes:
-      - ./src:/opt/remnashop/src
-      - ./logs:/opt/remnashop/logs
-      - ./assets:/opt/remnashop/assets
+      - ./src:/opt/remnatrishop/src
+      - ./logs:/opt/remnatrishop/logs
+      - ./assets:/opt/remnatrishop/assets
 
 x-common: &common
   ulimits:
@@ -81,9 +81,9 @@ services:
       retries: 3
     
 
-  remnashop:
-    container_name: "remnashop-local"
-    hostname: remnashop
+  remnatrishop:
+    container_name: "remnatrishop-local"
+    hostname: remnatrishop
     <<: [*build, *common, *logging, *env]
 
     ports:
@@ -96,9 +96,9 @@ services:
           condition: service_healthy
 
 
-  remnashop-taskiq-worker:
-    container_name: "remnashop-taskiq-worker"
-    hostname: remnashop-taskiq-worker
+  remnatrishop-taskiq-worker:
+    container_name: "remnatrishop-taskiq-worker"
+    hostname: remnatrishop-taskiq-worker
     <<: [*build, *common, *logging, *env]
 
     command: taskiq worker src.infrastructure.taskiq.worker:worker
@@ -110,9 +110,9 @@ services:
         remnashop-db:
           condition: service_healthy
 
-  remnashop-taskiq-scheduler:
-    container_name: "remnashop-taskiq-scheduler"
-    hostname: remnashop-taskiq-scheduler
+  remnatrishop-taskiq-scheduler:
+    container_name: "remnatrishop-taskiq-scheduler"
+    hostname: remnatrishop-taskiq-scheduler
     <<: [*build, *common, *logging, *env]
 
     command: taskiq scheduler src.infrastructure.taskiq.scheduler:scheduler

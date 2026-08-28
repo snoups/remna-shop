@@ -1,5 +1,5 @@
 FROM python:3.12-alpine
-WORKDIR /opt/remnashop
+WORKDIR /opt/remnatrishop
 
 RUN apk add --no-cache git postgresql-client
 
@@ -10,7 +10,7 @@ COPY docker-entrypoint.sh .
 RUN pip install --no-cache-dir uv && uv sync --frozen
 
 ENV UVICORN_RELOAD_ENABLED=true
-ENV PATH="/opt/remnashop/.venv/bin:$PATH"
+ENV PATH="/opt/remnatrishop/.venv/bin:$PATH"
 
 RUN chmod +x ./docker-entrypoint.sh
 CMD ["./docker-entrypoint.sh"]

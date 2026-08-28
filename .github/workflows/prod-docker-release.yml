@@ -1,4 +1,4 @@
-name: Remnashop - Release
+name: Remnatrishop - Release
 
 on:
   release:
@@ -72,7 +72,7 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: false
           body: |
-            # 🛍 Remnashop ${{ github.ref_name }} 
+            # 🛍 Remnatrishop ${{ github.ref_name }} 
             [![Telegram Group](https://img.shields.io/badge/public_group-white?style=social&logo=Telegram&logoColor=blue)](https://t.me/remna_shop)
             [![Remnawave](https://img.shields.io/badge/remnawave-white?style=social&logo=Telegram&logoColor=blue)](https://t.me/+xQs17zMzwCY1NzYy)
 

@@ -14,7 +14,7 @@ from src.core.enums import SubscriptionStatus
 class SubscriptionRelinker:
     """Re-link legacy subscriptions to Remnawave 3.2.x numeric user IDs.
 
-    Older remnashop versions stored the panel 2.x user UUID in
+    Legacy versions of this project stored the panel 2.x user UUID in
     ``subscriptions.user_remna_id``. The panel 3.2.x API only exposes numeric
     user IDs, so migration 0047 stores the REMNA_ID_UNLINKED sentinel (-1)
     for such rows. On startup we resolve them by the deterministic username

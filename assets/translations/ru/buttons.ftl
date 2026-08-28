@@ -95,7 +95,7 @@ btn-dashboard =
     .promocodes = 🎟 Промокоды
     .access = 🔓 Режим доступа
     .remnawave = 🌊 RemnaWave
-    .remnashop = 🛍 RemnaShop
+    .remnashop = 🛍 Remnatrishop
     .transactions = 🧾 Транзакции
     .importer = 📥 Импорт пользователей
 
@@ -171,7 +171,7 @@ btn-user =
     .referral-reset = 🔄 Сбросить реф. ссылку
     .sync = 🌀 Синхронизировать
     .sync-remnawave = 🌊 Использовать данные Remnawave
-    .sync-remnashop = 🛍 Использовать данные Remnashop
+    .sync-remnashop = 🛍 Использовать данные Remnatrishop
     .give-subscription = 🎁 Выдать подписку
     .subscription-internal-squads = ⏺️ Внутренние сквады
     .subscription-external-squads = ⏹️ Внешний сквад

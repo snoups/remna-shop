@@ -18,7 +18,7 @@ from .commands.purchase import ActivateTrialSubscription, PurchaseSubscription
 from .commands.set_plan import SetUserSubscription
 from .commands.sync import (
     CheckSubscriptionSyncState,
-    SyncSubscriptionFromRemnashop,
+    SyncSubscriptionFromRemnatrishop,
     SyncSubscriptionFromRemnawave,
 )
 from .queries.match import MatchSubscription
@@ -36,7 +36,7 @@ SUBSCRIPTION_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     MatchSubscription,
     CheckSubscriptionSyncState,
     SyncSubscriptionFromRemnawave,
-    SyncSubscriptionFromRemnashop,
+    SyncSubscriptionFromRemnatrishop,
     SetUserSubscription,
     ActivateTrialSubscription,
     PurchaseSubscription,

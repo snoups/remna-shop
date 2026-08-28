@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-ASSETS_CONTAINER_PATH="/opt/remnashop/assets"
-ASSETS_DEFAULT_PATH="/opt/remnashop/assets.default"
+ASSETS_CONTAINER_PATH="/opt/remnatrishop/assets"
+ASSETS_DEFAULT_PATH="/opt/remnatrishop/assets.default"
 
 UVICORN_RELOAD_ARGS=""
 
@@ -73,7 +73,7 @@ echo "Migrations deployed successfully"
 
 if [ "$UVICORN_RELOAD_ENABLED" = "true" ]; then
     echo "Uvicorn will run with reload enabled"
-    UVICORN_RELOAD_ARGS="--reload --reload-dir /opt/remnashop/src --reload-dir /opt/remnashop/assets --reload-include *.ftl"
+    UVICORN_RELOAD_ARGS="--reload --reload-dir /opt/remnatrishop/src --reload-dir /opt/remnatrishop/assets --reload-include *.ftl"
 else
     echo "Uvicorn will run without reload"
 fi

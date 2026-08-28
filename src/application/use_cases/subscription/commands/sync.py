@@ -117,7 +117,7 @@ class SyncSubscriptionFromRemnawave(Interactor[int, None]):
             await self.uow.commit()
 
 
-class SyncSubscriptionFromRemnashop(Interactor[int, None]):
+class SyncSubscriptionFromRemnatrishop(Interactor[int, None]):
     required_permission = Permission.USER_SYNC
 
     def __init__(

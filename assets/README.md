@@ -27,7 +27,7 @@ To **use the bot’s shipped defaults** — simply don’t place a file; the ima
 
 ## Locale support
 
-Banner filenames must correspond to the predefined names in `/remnashop/src/core/enums.py` as `BannerName`:
+Banner filenames must correspond to the predefined names in `/remnatrishop/src/core/enums.py` as `BannerName`:
 
 * **`DEFAULT`**: The default banner, used when a specific banner is not found.
 * **`MENU`**: The main menu banner.
@@ -37,7 +37,7 @@ Banner filenames must correspond to the predefined names in `/remnashop/src/core
 
 ## Supported formats
 
-The following file formats are supported (`BannerFormat` in `/remnashop/src/core/enums.py`):
+The following file formats are supported (`BannerFormat` in `/remnatrishop/src/core/enums.py`):
 
 * **JPG**, **JPEG**, **PNG**, **GIF**, **WEBP**
 

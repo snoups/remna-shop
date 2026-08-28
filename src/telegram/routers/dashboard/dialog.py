@@ -82,7 +82,7 @@ dashboard = Window(
         ),
         Start(
             text=I18nFormat("btn-dashboard.remnashop"),
-            id="remnashop",
+            id="remnatrishop",
             state=DashboardRemnashop.MAIN,
             mode=StartMode.RESET_STACK,
             when=require_permission(Permission.VIEW_REMNASHOP),

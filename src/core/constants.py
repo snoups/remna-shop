@@ -32,7 +32,7 @@ INVITE_LINK_PATTERN: Pattern[str] = re.compile(r"^https://t\.me/(\+|joinchat/)[A
 REMNAWAVE_MIN_VERSION: Final[Version] = Version("3.2.0")
 REMNAWAVE_MAX_VERSION: Final[Version] = Version("3.3.99")
 
-REPOSITORY: Final[str] = "https://github.com/snoups/remnashop"
+REPOSITORY: Final[str] = "https://github.com/elcrazycol/remnatrishop"
 DOCS: Final[str] = "https://remnashop.mintlify.app"
 T_ME: Final[str] = "https://t.me/"
 API_V1: Final[str] = "/api/v1"

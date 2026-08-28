@@ -13,7 +13,9 @@ from src.core.config import AppConfig
 from src.infrastructure.redis.keys import LatestNotifiedVersionKey
 from src.infrastructure.taskiq.broker import broker
 
-GITHUB_RELEASE_URL: Final[str] = "https://api.github.com/repos/snoups/remnashop/releases/latest"
+GITHUB_RELEASE_URL: Final[str] = (
+    "https://api.github.com/repos/elcrazycol/remnatrishop/releases/latest"
+)
 
 
 @broker.task(schedule=[{"cron": "0 * * * *"}], retry_on_error=False)

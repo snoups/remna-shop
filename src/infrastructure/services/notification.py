@@ -42,7 +42,7 @@ from src.application.events.system import (
     BlacklistRegistrationAttemptEvent,
     BotUpdateEvent,
     PromocodeActivatedEvent,
-    RemnashopWelcomeEvent,
+    RemnatrishopWelcomeEvent,
     SubscriptionRevokedEvent,
     TorrentBlockerReportEvent,
     TrialActivatedEvent,
@@ -70,8 +70,8 @@ from src.telegram.keyboards import (
     get_buy_keyboard,
     get_close_notification_button,
     get_contact_support_keyboard,
-    get_remnashop_keyboard,
-    get_remnashop_update_keyboard,
+    get_remnatrishop_keyboard,
+    get_remnatrishop_update_keyboard,
     get_renew_keyboard,
     get_user_keyboard,
 )
@@ -138,10 +138,10 @@ class NotificationService(Notifier):
             return get_contact_support_keyboard(event.support_url)
         if isinstance(event, TorrentBlockerReportEvent):
             return get_user_keyboard(event.user_id)
-        if isinstance(event, RemnashopWelcomeEvent):
-            return get_remnashop_keyboard()
+        if isinstance(event, RemnatrishopWelcomeEvent):
+            return get_remnatrishop_keyboard()
         if isinstance(event, BotUpdateEvent):
-            return get_remnashop_update_keyboard()
+            return get_remnatrishop_update_keyboard()
         if isinstance(event, UserRegisteredEvent):
             return get_user_keyboard(event.user_id, event.referrer_user_id)
         if isinstance(event, BlacklistRegistrationAttemptEvent):
@@ -161,8 +161,8 @@ class NotificationService(Notifier):
             return get_user_keyboard(event.user_id)
         return None
 
-    @on_event(RemnashopWelcomeEvent)
-    async def on_remnashop_welcome_event(self, event: RemnashopWelcomeEvent) -> None:
+    @on_event(RemnatrishopWelcomeEvent)
+    async def on_remnatrishop_welcome_event(self, event: RemnatrishopWelcomeEvent) -> None:
         logger.info(f"Received '{event.event_type}' event")
         payload = event.as_payload()
         payload.reply_markup = self._resolve_keyboard(event)

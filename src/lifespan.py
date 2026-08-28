@@ -20,7 +20,7 @@ from src.application.events import (
     RemnawaveVersionWarningEvent,
     WebhookErrorEvent,
 )
-from src.application.events.system import RemnashopWelcomeEvent
+from src.application.events.system import RemnatrishopWelcomeEvent
 from src.application.use_cases.gateways.commands.payment import CreateDefaultPaymentGateway
 from src.application.use_cases.settings.commands.defaults import CreateDefaultSettings
 from src.core.config import AppConfig
@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if last_welcomed != current_version:
         await redis.set(welcomed_key, current_version)
-        await event_bus.publish(RemnashopWelcomeEvent())
+        await event_bus.publish(RemnatrishopWelcomeEvent())
 
     bot_startup_event = BotStartupEvent(
         **config.build.data,

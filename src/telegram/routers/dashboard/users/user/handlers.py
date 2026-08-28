@@ -44,7 +44,7 @@ from src.application.use_cases.subscription.commands.set_plan import (
 )
 from src.application.use_cases.subscription.commands.sync import (
     CheckSubscriptionSyncState,
-    SyncSubscriptionFromRemnashop,
+    SyncSubscriptionFromRemnatrishop,
     SyncSubscriptionFromRemnawave,
 )
 from src.application.use_cases.user.commands.blocking import ToggleUserBlockedStatus
@@ -852,7 +852,7 @@ async def on_sync_from_remnashop(
     widget: Button,
     dialog_manager: DialogManager,
     notifier: FromDishka[Notifier],
-    sync_subscription_from_remnashop: FromDishka[SyncSubscriptionFromRemnashop],
+    sync_subscription_from_remnashop: FromDishka[SyncSubscriptionFromRemnatrishop],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     target_user_id = dialog_manager.dialog_data[TARGET_USER_ID]
