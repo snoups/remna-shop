@@ -6,6 +6,10 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -43,7 +47,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: 🏗️ Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
@@ -51,8 +55,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/snoups/remnashop:latest
-            ghcr.io/snoups/remnashop:${{ github.ref_name }}
+            ghcr.io/${GITHUB_REPOSITORY}:latest
+            ghcr.io/${GITHUB_REPOSITORY}:${{ github.ref_name }}
           build-args: |
             BUILD_TIME=${{ steps.vars.outputs.build_time }}
             BUILD_BRANCH=main
@@ -82,12 +86,12 @@ jobs:
 
             ### Latest:
             ```
-            ghcr.io/snoups/remnashop:latest
+            ghcr.io/${GITHUB_REPOSITORY}:latest
             ```
 
             ### Versioned:
             ```
-            ghcr.io/snoups/remnashop:${{ github.ref_name }}
+            ghcr.io/${GITHUB_REPOSITORY}:${{ github.ref_name }}
             ```
           draft: false
           prerelease: false
