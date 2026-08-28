@@ -30,7 +30,7 @@ USERNAME_PATTERN: Pattern[str] = re.compile(r"^@[a-zA-Z0-9_]{5,32}$")
 INVITE_LINK_PATTERN: Pattern[str] = re.compile(r"^https://t\.me/(\+|joinchat/)[A-Za-z0-9_\-]+")
 
 REMNAWAVE_MIN_VERSION: Final[Version] = Version("3.2.0")
-REMNAWAVE_MAX_VERSION: Final[Version] = Version("3.2.99")
+REMNAWAVE_MAX_VERSION: Final[Version] = Version("3.3.99")
 
 REPOSITORY: Final[str] = "https://github.com/snoups/remnashop"
 DOCS: Final[str] = "https://remnashop.mintlify.app"
@@ -43,6 +43,9 @@ REMNAWAVE_WEBHOOK_PATH: Final[str] = "/remnawave"
 IMPORTED_TAG: Final[str] = "IMPORTED"
 INLINE_QUERY_INVITE: Final[str] = "invite"
 REMNASHOP_PREFIX: Final[str] = "rs_"
+# Placeholder in subscriptions.user_remna_id for rows migrated from the panel
+# 2.x era (UUID values); SubscriptionRelinker resolves it to a numeric id.
+REMNA_ID_UNLINKED: Final[int] = -1
 WEB_PREFIX: Final[str] = "web_"
 PAYMENT_PREFIX: Final[str] = "payment_"
 GOTO_PREFIX: Final[str] = "gt_"

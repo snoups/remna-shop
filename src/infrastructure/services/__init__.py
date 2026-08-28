@@ -12,6 +12,7 @@ from .notification_queue import NotificationQueue, NotificationWorker
 from .password_hasher import PasswordHasherImpl
 from .redirect import RedirectImpl
 from .remnawave import RemnawaveImpl
+from .subscription_relink import SubscriptionRelinker
 from .translator import TranslatorHubImpl
 from .webhook import WebhookService
 from .xui_reader import XuiDbReaderImpl
@@ -32,6 +33,7 @@ __all__ = [
     "PasswordHasherImpl",
     "PaymentNotificationDispatcherImpl",
     "RedirectImpl",
+    "SubscriptionRelinker",
     "RemnawaveImpl",
     "TranslatorHubImpl",
     "WebhookService",

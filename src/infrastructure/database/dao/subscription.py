@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.common.dao import SubscriptionDao, UserDao
 from src.application.dto import PlanSubStatsDto, SubscriptionDto, SubscriptionStatsDto
+from src.core.constants import REMNA_ID_UNLINKED
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.models import Subscription, User
@@ -104,6 +105,20 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
 
         logger.debug(f"Active subscription not found for user_id '{user_id}'")
         return None
+
+    async def get_all_unlinked(self) -> list[SubscriptionDto]:
+        stmt = (
+            select(Subscription)
+            .where(Subscription.user_remna_id == REMNA_ID_UNLINKED)
+            .where(Subscription.status != SubscriptionStatus.EXPIRED)
+            .order_by(Subscription.id)
+        )
+        db_subscriptions = list((await self.session.scalars(stmt)).all())
+        if db_subscriptions:
+            logger.warning(
+                f"Found '{len(db_subscriptions)}' subscription(s) with no linked panel user"
+            )
+        return self._convert_to_dto_list(db_subscriptions)
 
     async def update(self, subscription: SubscriptionDto) -> Optional[SubscriptionDto]:
         if not subscription.id:

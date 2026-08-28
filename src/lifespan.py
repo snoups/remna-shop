@@ -32,6 +32,7 @@ from src.infrastructure.services import (
     CommandService,
     EventBusImpl,
     NotificationWorker,
+    SubscriptionRelinker,
     WebhookService,
 )
 from src.web.endpoints import TelegramWebhookEndpoint
@@ -75,6 +76,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # request can read it, so `get()` never has to lazily create — and cache —
         # an uncommitted row whose id would later fail to match on update().
         await create_default_settings.system()
+
+        subscription_relinker = await startup_container.get(SubscriptionRelinker)
+        try:
+            await subscription_relinker.relink()
+        except Exception:
+            logger.exception("Failed to re-link legacy subscriptions, will retry on next restart")
+
         settings = await settings_dao.get()
         allowed_updates = dispatcher.resolve_used_update_types()
         webhook_info: WebhookInfo = await webhook_service.setup_webhook(allowed_updates)

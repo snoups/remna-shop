@@ -37,6 +37,7 @@ from src.infrastructure.services import (
     RedirectImpl,
     RemnawaveImpl,
     SmtpEmailSender,
+    SubscriptionRelinker,
     WebhookService,
     XuiDbReaderImpl,
 )
@@ -63,6 +64,7 @@ class ServicesProvider(Provider):
 
     remnawave = provide(source=RemnawaveImpl, provides=Remnawave)
     remna_webhook = provide(source=RemnaWebhookService, scope=Scope.REQUEST)
+    relinker = provide(source=SubscriptionRelinker, scope=Scope.REQUEST)
 
     notification_queue = provide(source=NotificationQueue)
     notification_worker = provide(source=NotificationWorker)

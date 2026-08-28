@@ -373,9 +373,7 @@ class RemnaWebhookService:
             subscription = await self.subscription_dao.get_by_remna_id(remna_user.id)
 
             if not subscription:
-                logger.warning(
-                    f"Subscription not found for ID '{remna_user.id}', delete aborted"
-                )
+                logger.warning(f"Subscription not found for ID '{remna_user.id}', delete aborted")
                 return
 
             user_id = subscription.user_id

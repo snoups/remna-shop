@@ -122,9 +122,7 @@ class RemnawaveImpl(Remnawave):
                 f"ID: '{remna_user.id}', telegram_id: '{remna_user.telegram_id}'"
             )
         except NotFoundError:
-            logger.warning(
-                f"RemnaUser '{request_dto.username}' with ID '{user_id}' not found"
-            )
+            logger.warning(f"RemnaUser '{request_dto.username}' with ID '{user_id}' not found")
             raise
 
         if reset_traffic:
@@ -191,6 +189,15 @@ class RemnawaveImpl(Remnawave):
             return remna_user
         except NotFoundError:
             logger.debug(f"RemnaUser '{user_id}' not found in panel")
+            return None
+
+    async def get_user_by_username(self, username: str) -> Optional[UserResponseDto]:
+        try:
+            remna_user = await self.sdk.users.get_user_by_username(username)
+            logger.debug(f"Fetched RemnaUser '{username}' with ID '{remna_user.id}' from panel")
+            return remna_user
+        except NotFoundError:
+            logger.debug(f"RemnaUser '{username}' not found in panel")
             return None
 
     async def get_users_by_telegram_id(self, telegram_id: int) -> list[UserResponseDto]:

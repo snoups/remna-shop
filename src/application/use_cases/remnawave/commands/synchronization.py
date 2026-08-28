@@ -66,9 +66,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
                 )
 
             if not user:
-                logger.warning(
-                    f"Sync failed: user '{remna_user.id}' could not be found or created"
-                )
+                logger.warning(f"Sync failed: user '{remna_user.id}' could not be found or created")
                 return False
 
             subscription = await self.subscription_dao.get_current(user.id)
