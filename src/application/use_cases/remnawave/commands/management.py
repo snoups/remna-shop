@@ -3,12 +3,13 @@ from datetime import timedelta
 
 from loguru import logger
 
-from src.application.common import Interactor
+from src.application.common import EventPublisher, Interactor
 from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.common.remnawave import Remnawave
 from src.application.common.uow import UnitOfWork
 from src.application.dto import UserDto
+from src.application.events import UserAllDevicesDeletedEvent
 from src.core.exceptions import CooldownError, PermissionDeniedError
 from src.core.utils.time import datetime_now
 
@@ -83,11 +84,13 @@ class DeleteUserAllDevices(Interactor[None, None]):
         remnawave: Remnawave,
         settings_dao: SettingsDao,
         uow: UnitOfWork,
+        event_publisher: EventPublisher,
     ) -> None:
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
         self.settings_dao = settings_dao
         self.uow = uow
+        self.event_publisher = event_publisher
 
     async def _execute(self, actor: UserDto, data: None) -> None:
         settings = await self.settings_dao.get()
@@ -109,6 +112,9 @@ class DeleteUserAllDevices(Interactor[None, None]):
             if datetime_now() < available_at:
                 raise CooldownError(available_at)
 
+        devices = await self.remnawave.get_devices(current_subscription.user_remna_id)
+        device_count = len(devices)
+
         async with self.uow:
             await self.remnawave.delete_all_devices(current_subscription.user_remna_id)
             await self.remnawave.drop_connections(current_subscription.user_remna_id)
@@ -117,6 +123,18 @@ class DeleteUserAllDevices(Interactor[None, None]):
             await self.uow.commit()
 
         logger.info(f"{actor.log} Deleted all devices and dropped connections")
+
+        if device_count:
+            await self.event_publisher.publish(
+                UserAllDevicesDeletedEvent(
+                    user_id=actor.id,
+                    telegram_id=actor.telegram_id,
+                    username=actor.username,
+                    name=actor.name,
+                    email=actor.email,
+                    device_count=device_count,
+                )
+            )
 
 
 class ResetUserTraffic(Interactor[int, None]):

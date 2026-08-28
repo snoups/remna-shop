@@ -69,7 +69,7 @@ def gb_to_bytes(value: Optional[int]) -> int:
     return _round_decimal(Decimal(value) * _GB_FACTOR)
 
 
-def bytes_to_gb(value: Optional[int]) -> int:
+def bytes_to_gb(value: Optional[float]) -> int:
     if not value:
         return 0
 

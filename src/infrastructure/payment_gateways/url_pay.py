@@ -41,6 +41,7 @@ class UrlPayGateway(BasePaymentGateway):
             base_url=self.API_BASE,
             headers={
                 "Authorization": f"Bearer {self.data.settings.api_key.get_secret_value()}",  # type: ignore[union-attr]
+                "Accept": "application/json",
             },
         )
 
@@ -98,14 +99,15 @@ class UrlPayGateway(BasePaymentGateway):
         return payment_id, transaction_status
 
     def _create_payment_payload(self, amount: str, details: str, order_uuid: str) -> dict[str, Any]:
+        currency = self.data.currency.value.lower()
         return {
-            "currency": self.data.currency.value,
+            "currency": currency,
             "amount": amount,
             "uuid": order_uuid,
             "shopId": self.data.settings.shop_id,  # type: ignore[union-attr]
             "description": details,
             "sign": self._generate_signature(
-                self.data.currency.value,
+                currency,
                 amount,
                 self.data.settings.shop_id,  # type: ignore[union-attr, arg-type]
             ),

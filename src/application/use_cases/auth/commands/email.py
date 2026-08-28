@@ -18,8 +18,8 @@ from src.application.use_cases.auth._codes import (
 )
 from src.core.config import AppConfig
 from src.core.constants import (
+    EMAIL_CODE_RESEND_COOLDOWN_SECONDS,
     EMAIL_VERIFICATION_BODY_TEMPLATE,
-    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS,
     EMAIL_VERIFICATION_SUBJECT,
 )
 from src.core.exceptions import EmailDeliveryDisabledError
@@ -127,7 +127,7 @@ class RequestEmailVerification(Interactor[RequestEmailVerificationDto, EmailVeri
         check_email_resend_cooldown(
             actor.email_verification_expires_at,
             self.config.email.verification_code_ttl_minutes,
-            EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+            EMAIL_CODE_RESEND_COOLDOWN_SECONDS,
             datetime_now(),
         )
 

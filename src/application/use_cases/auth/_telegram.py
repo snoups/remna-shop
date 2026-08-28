@@ -4,14 +4,14 @@ import time
 from typing import Any
 from urllib.parse import parse_qsl
 
-from src.core.constants import TELEGRAM_AUTH_MAX_AGE_SECONDS
+from src.core.constants import AUTH_TELEGRAM_MAX_AGE_SECONDS
 
 
 def verify_telegram_auth(data: dict[str, Any], bot_token: str) -> bool:
     telegram_hash = str(data.get("hash", ""))
     auth_date = int(data.get("auth_date", 0))
 
-    if int(time.time()) - auth_date > TELEGRAM_AUTH_MAX_AGE_SECONDS:
+    if int(time.time()) - auth_date > AUTH_TELEGRAM_MAX_AGE_SECONDS:
         return False
 
     data_check = {k: str(v) for k, v in data.items() if k != "hash"}
@@ -36,7 +36,7 @@ def verify_telegram_webapp_init_data(init_data: str, bot_token: str) -> bool:
         return False
 
     auth_date = int(fields.get("auth_date", 0))
-    if int(time.time()) - auth_date > TELEGRAM_AUTH_MAX_AGE_SECONDS:
+    if int(time.time()) - auth_date > AUTH_TELEGRAM_MAX_AGE_SECONDS:
         return False
 
     data_check_string = "\n".join(f"{k}={fields[k]}" for k in sorted(fields))

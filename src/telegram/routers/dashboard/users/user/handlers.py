@@ -13,6 +13,7 @@ from loguru import logger
 from src.application.common import BotService, Notifier, Redirect, TranslatorRunner
 from src.application.common.dao import PlanDao, SubscriptionDao, TransactionDao, UserDao
 from src.application.dto import MessagePayloadDto, TelegramUserDto
+from src.application.use_cases.gateways.commands.payment import RetryFailedTransaction
 from src.application.use_cases.plan.commands.access import (
     ToggleUserPlanAccess,
     ToggleUserPlanAccessDto,
@@ -73,6 +74,7 @@ from src.core.constants import (
     USER_LIST_PAYLOAD,
 )
 from src.core.enums import Role
+from src.core.exceptions import PurchaseError, TransactionNotRetryableError
 from src.core.utils.validators import is_positive_int, parse_int
 from src.telegram.keyboards import get_contact_support_keyboard
 from src.telegram.states import DashboardUser, DashboardUsers
@@ -638,6 +640,30 @@ async def on_transaction_select(
 ) -> None:
     dialog_manager.dialog_data["selected_transaction"] = selected_transaction
     await dialog_manager.switch_to(state=DashboardUser.TRANSACTION)
+
+
+@inject
+async def on_grant_failed_subscription(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    notifier: FromDishka[Notifier],
+    retry_failed_transaction: FromDishka[RetryFailedTransaction],
+) -> None:
+    user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
+    payment_id: UUID = dialog_manager.dialog_data["selected_transaction"]
+
+    try:
+        await retry_failed_transaction(user, payment_id)
+        await notifier.notify_user(user, i18n_key="ntf-user.transaction-granted")
+    except PurchaseError:
+        await notifier.notify_user(user, i18n_key="ntf-user.transaction-grant-failed")
+    except TransactionNotRetryableError:
+        await notifier.notify_user(user, i18n_key="ntf-user.transaction-grant-stale")
+    except ValueError:
+        # Transaction vanished between opening the window and the click.
+        logger.warning(f"{user.log} Transaction '{payment_id}' not found for grant")
+        await notifier.notify_user(user, i18n_key="ntf-user.transaction-grant-stale")
 
 
 async def on_go_to_user(

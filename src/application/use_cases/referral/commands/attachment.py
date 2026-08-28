@@ -4,7 +4,7 @@ from typing import Optional
 from loguru import logger
 
 from src.application.common import EventPublisher, Interactor
-from src.application.common.dao import ReferralDao, SettingsDao, UserDao
+from src.application.common.dao import ReferralDao, UserDao
 from src.application.common.uow import UnitOfWork
 from src.application.dto import ReferralDto, UserDto
 from src.application.events import ReferralAttachedEvent
@@ -23,23 +23,19 @@ class AttachReferral(Interactor[AttachReferralDto, Optional[UserDto]]):
     def __init__(
         self,
         uow: UnitOfWork,
-        settings_dao: SettingsDao,
         user_dao: UserDao,
         referral_dao: ReferralDao,
         event_publisher: EventPublisher,
     ) -> None:
         self.uow = uow
-        self.settings_dao = settings_dao
         self.user_dao = user_dao
         self.referral_dao = referral_dao
         self.event_publisher = event_publisher
 
     async def _execute(self, actor: UserDto, data: AttachReferralDto) -> Optional[UserDto]:
-        settings = await self.settings_dao.get()
-        if not settings.referral.enable:
-            logger.info("Referral skipped: referral system is disabled")
-            return None
-
+        # Attach the referrer relationship regardless of whether the referral rewards
+        # program is enabled: the relationship is needed for invite-only access display
+        # and statistics. Reward accrual is gated separately in AssignReferralRewards.
         referrer = await self.user_dao.get_by_referral_code(data.referral_code)
 
         if not referrer:

@@ -24,7 +24,7 @@ event-error =
     <b>⚠️ Событие: Возможная несовместимость с Remnawave!</b>
 
     <blockquote>
-    Версия панели <b>{ $panel_version }</b> выше протестированной версии <b>{ $max_version }</b>. Некоторые функции бота могут работать некорректно.
+    Версия панели <b>{ $panel_version }</b> еще не протестирована — поддерживаются версии ниже <b>{ $max_version }</b>. Некоторые функции бота могут работать некорректно.
     </blockquote>
 
     { frg-build-info }
@@ -208,6 +208,18 @@ event-user =
     { hdr-hwid }
     { frg-user-hwid }
 
+    .all-devices-deleted =
+    #UserAllDevicesDeletedEvent
+
+    <b>🔅 Событие: Пользователь удалил все устройства!</b>
+
+    { hdr-user }
+    { frg-user-info }
+
+    <blockquote>
+    • <b>Удалено устройств</b>: { $device_count }
+    </blockquote>
+
 
 event-blacklist =
     .registration-attempt =
@@ -314,6 +326,18 @@ event-subscription =
         *[RESET] Трафик будет восстановлен через { $reset_time }. Вы также можете оформить подписку, чтобы пользоваться сервисом без ограничений.
         }
     }
+
+    .grace-activated =
+    <b>⏳ Подписка истекла</b>
+
+    Включен временный доступ: <b>{ $traffic_mb ->
+        [0] безлимит
+        *[other] { $traffic_mb } МБ
+        }</b>{ $is_indefinite ->
+        [1] { "" }
+       *[0] { " на " }{ $grace_until }
+    }.
+    Оплатите, чтобы восстановить полный доступ.
 
     .not-connected =
     <b>🔌 Не получилось подключиться?</b>

@@ -77,6 +77,15 @@ class SubscriptionDto(BaseDto, TrackableMixin, TimestampMixin):
     device_single_reset_at: Optional[datetime] = None
     device_all_reset_at: Optional[datetime] = None
     link_reset_at: Optional[datetime] = None
+    grace_until: Optional[datetime] = None
+
+    @property
+    def is_grace(self) -> bool:
+        return self.grace_until is not None
+
+    @property
+    def is_grace_indefinite(self) -> bool:
+        return self.grace_until is not None and self.grace_until.year == UNLIMITED_EXPIRE_YEAR
 
     @property
     def is_active(self) -> bool:

@@ -46,12 +46,14 @@ from src.application.events.system import (
     SubscriptionRevokedEvent,
     TorrentBlockerReportEvent,
     TrialActivatedEvent,
+    UserAllDevicesDeletedEvent,
     UserDevicesUpdatedEvent,
     UserFirstConnectionEvent,
     UserPurchaseEvent,
     UserRegisteredEvent,
 )
 from src.application.events.user import (
+    GraceActivatedEvent,
     SubscriptionExpiredAgoEvent,
     SubscriptionExpiredEvent,
     SubscriptionExpiresEvent,
@@ -73,7 +75,7 @@ from src.telegram.keyboards import (
     get_renew_keyboard,
     get_user_keyboard,
 )
-from src.telegram.widgets import extract_tg_emoji
+from src.telegram.widgets import extract_color, extract_tg_emoji
 
 
 class NotificationService(Notifier):
@@ -126,6 +128,7 @@ class NotificationService(Notifier):
                 SubscriptionExpiredEvent,
                 SubscriptionExpiredAgoEvent,
                 SubscriptionExpiresEvent,
+                GraceActivatedEvent,
             ),
         ):
             return get_buy_keyboard() if event.is_trial else get_renew_keyboard()
@@ -148,6 +151,7 @@ class NotificationService(Notifier):
             (
                 UserFirstConnectionEvent,
                 UserDevicesUpdatedEvent,
+                UserAllDevicesDeletedEvent,
                 UserPurchaseEvent,
                 TrialActivatedEvent,
                 SubscriptionRevokedEvent,
@@ -499,7 +503,10 @@ class NotificationService(Notifier):
                     btn_dict = i_btn.model_dump()
                     translated = self._get_translated_text(locale, i_btn.text) or i_btn.text
                     clean_text, emoji_id = extract_tg_emoji(translated)
+                    clean_text, color = extract_color(clean_text)
                     btn_dict["text"] = clean_text
+                    if color is not None:
+                        btn_dict["style"] = color
                     if emoji_id and not btn_dict.get("icon_custom_emoji_id"):
                         btn_dict["icon_custom_emoji_id"] = emoji_id
                     i_buttons.append(InlineKeyboardButton(**btn_dict))
@@ -512,7 +519,9 @@ class NotificationService(Notifier):
                 r_buttons = []
                 for r_btn in r_row:
                     btn_dict = r_btn.model_dump()
-                    btn_dict["text"] = self._get_translated_text(locale, r_btn.text) or r_btn.text
+                    translated = self._get_translated_text(locale, r_btn.text) or r_btn.text
+                    clean_text, _ = extract_tg_emoji(translated)
+                    btn_dict["text"], _ = extract_color(clean_text)
                     r_buttons.append(type(r_btn)(**btn_dict))
                 r_rows.append(r_buttons)
             return ReplyKeyboardMarkup(keyboard=r_rows, **keyboard.model_dump(exclude={"keyboard"}))

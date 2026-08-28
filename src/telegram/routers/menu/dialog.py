@@ -56,6 +56,13 @@ custom_buttons = (
 menu = Window(
     Banner(BannerName.MENU),
     I18nFormat("msg-main-menu"),
+    Row(
+        WebApp(
+            text=I18nFormat("btn-menu.web-cabinet"),
+            url=Format("{web_cabinet_url}"),
+        ),
+        when=F["web_enabled"],
+    ),
     *connect_buttons,
     Row(
         Button(
@@ -115,13 +122,6 @@ menu = Window(
             id="support",
             url=Format("{support_url}"),
         ),
-    ),
-    Row(
-        WebApp(
-            text=I18nFormat("btn-menu.web-cabinet"),
-            url=Format("{web_cabinet_url}"),
-        ),
-        when=F["web_enabled"],
     ),
     *custom_buttons,
     Row(

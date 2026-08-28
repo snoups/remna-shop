@@ -135,6 +135,17 @@ class RemnashopExtra(StatesGroup):
     REFERRAL_RESET = State()
     TRIAL_CHANNEL_GUARD = State()
     MINI_APP_RESERVE = State()
+    STARS_PAID_REQUIREMENT = State()
+
+
+class RemnashopGrace(StatesGroup):
+    MAIN = State()
+    TRAFFIC_INPUT = State()
+    DURATION_INPUT = State()
+    TAG_INPUT = State()
+    STRATEGY = State()
+    INTERNAL_SQUADS = State()
+    EXTERNAL_SQUAD = State()
 
 
 class RemnashopReferral(StatesGroup):

@@ -57,14 +57,19 @@ msg-menu-devices =
     }</b>
 
     { $has_devices ->
-    [0] { empty }
+    [0] { $max_count ->
+        [0] { empty }
+        *[LIMIT] Если не хватает лимита устройств — измените подписку.
+        }
     *[HAS] { $device_single_enabled ->
         [0] Для отвязки устройства обратитесь в техподдержку.
         *[OTHER] Нажмите на устройство чтобы удалить его.
         }
-    }{ $max_count ->
-    [0] { space }
-    *[LIMIT] Если не хватает лимита устройств — измените подписку.
+
+        { $max_count ->
+        [0] { empty }
+        *[LIMIT] Если не хватает лимита устройств — измените подписку.
+        }
     }
 
 msg-menu-devices-confirm-reissue =
@@ -1014,7 +1019,99 @@ msg-extra-mini-app-reserve =
     }
     </blockquote>
 
-    Работает только при включённом Mini App (BOT_MINI_APP).
+    Работает только при включенном Mini App (BOT_MINI_APP).
+
+msg-extra-stars-paid-requirement =
+    ⚙️ <b>Оплата через Stars только после покупки</b>
+
+    Когда включено, оплатить через Telegram Stars могут только пользователи, у которых уже есть хотя бы одна оплаченная покупка другим способом.
+
+    <blockquote>
+    Статус: { $enabled ->
+        [1] 🟢 Включено
+        *[0] 🔴 Выключено
+    }
+    </blockquote>
+
+msg-remnashop-grace =
+    <b>⏳ Grace-режим</b>
+
+    Льготный доступ, который выдается пользователю после истечения подписки.
+
+    <blockquote>
+    <b>Статус:</b> { $enabled ->
+        [1] 🟢 Включено
+        *[0] 🔴 Выключено
+    }
+    <b>Лимит трафика:</b> { $traffic_mb } МБ
+    <b>Стратегия сброса:</b> { traffic-strategy }
+    <b>Длительность:</b> { $value ->
+        [0] { unlimited }
+        *[OTHER] { unit-day }
+    }
+    <b>Тег:</b> { $tag ->
+        [0] —
+        *[HAS] { $tag }
+    }
+    <b>⏺️ Внутренние:</b> { $internal_squads ->
+        [0] из подписки
+        *[HAS] { $internal_squads }
+    }
+    <b>⏹️ Внешний:</b> { $external_squad ->
+        [0] из подписки
+        *[HAS] { $external_squad }
+    }
+    </blockquote>
+
+msg-remnashop-grace-traffic =
+    <b>🌐 Лимит трафика grace-режима</b>
+
+    <blockquote>
+    <b>Текущий:</b> { $traffic_mb } МБ
+    </blockquote>
+
+    Введите новый лимит трафика в МБ (0 — без ограничений).
+
+msg-remnashop-grace-duration =
+    <b>⏳ Длительность grace-режима</b>
+
+    <blockquote>
+    <b>Текущая:</b> { $value ->
+        [0] { unlimited }
+        *[OTHER] { unit-day }
+    }
+    </blockquote>
+
+    Введите длительность в днях (0 — бессрочно).
+
+msg-remnashop-grace-tag =
+    <b>📌 Тег grace-режима</b>
+
+    <blockquote>
+    <b>Текущий:</b> { $tag ->
+        [0] —
+        *[HAS] { $tag }
+    }
+    </blockquote>
+
+    Введите новый тег (пустое сообщение — очистить).
+
+msg-remnashop-grace-strategy =
+    <b>🔄 Стратегия сброса трафика</b>
+
+    Выберите стратегию сброса трафика для grace-режима.
+
+msg-remnashop-grace-internal-squads =
+    <b>⏺️ Внутренние сквады grace-режима</b>
+
+    Выберите, какие внутренние группы будут присвоены в grace-режиме.
+    Если ничего не выбрано — используются внутренние сквады из истекшей подписки.
+
+msg-remnashop-grace-external-squad =
+    <b>⏹️ Внешний сквад grace-режима</b>
+
+    Выберите, какая внешняя группа будет присвоена в grace-режиме.
+    Если не выбран — используется внешний сквад из истекшей подписки.
 
 msg-admins-main = <b>👮‍♂️ Администраторы</b>
 
@@ -1413,7 +1510,17 @@ msg-notifications-system-route-thread-id =
 
 
 # Subscription
-msg-subscription-main = <b>💳 Подписка</b>
+msg-subscription-main =
+    <b>💳 Подписка</b>
+
+    { $is_grace ->
+    [1]
+    <b>⏳ Временный доступ</b>{ $is_grace_indefinite ->
+        [1] { "" }
+       *[0] { " до " }{ $grace_until }
+    }
+   *[0] { "" }
+    }
 msg-subscription-plans = <b>📦 Выберите план</b>
 msg-subscription-new-success = Чтобы начать пользоваться нашим сервисом, нажмите кнопку <code>`{ btn-subscription.connect }`</code> и следуйте инструкциям!
 msg-subscription-renew-success = Ваша подписка продлена на { $added_duration }.
@@ -1822,6 +1929,12 @@ msg-ad-link-stats =
     • <b>Конверсия пробник → покупка</b>: { $trial_to_buy_rate }%
     </blockquote>
 
+    <b>Общий доход:</b>
     <blockquote>
     { $revenue_lines }
+    </blockquote>
+
+    <b>С первых покупок:</b>
+    <blockquote>
+    { $first_revenue_lines }
     </blockquote>

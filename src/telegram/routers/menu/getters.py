@@ -34,6 +34,7 @@ async def menu_getter(
         menu_data = await get_menu_data(user)
         settings = await settings_dao.get()
         support_url = bot_service.get_support_url(text=i18n.get("message.help"))
+        web_cabinet_url = config.web_cabinet_url.strip()
 
         purchase_discount = user.purchase_discount or 0
         personal_discount = user.personal_discount or 0
@@ -53,8 +54,8 @@ async def menu_getter(
             "is_mini_app": config.bot.is_mini_app,
             "is_mini_app_reserve": config.bot.is_mini_app and settings.extra.mini_app_reserve,
             "support_url": support_url,
-            "web_enabled": config.web_enabled,
-            "web_cabinet_url": config.web_cabinet_url.strip(),
+            "web_enabled": config.web_enabled and bool(web_cabinet_url),
+            "web_cabinet_url": web_cabinet_url,
             # referral
             "referral_enabled": menu_data.is_referral_enabled,
             # defaults

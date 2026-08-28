@@ -17,6 +17,7 @@ class AdLinkStatsDto:
     buyers: int
     trial_buyers: int
     revenue: dict[str, float]
+    first_purchase_revenue: dict[str, float]
 
     @property
     def reg_to_buy_rate(self) -> float:

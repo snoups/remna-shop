@@ -138,10 +138,37 @@ class AdLinkDaoImpl(AdLinkDao):
             row["currency"].symbol: float(row["total"] or 0) for row in amounts_rows
         }
 
+        # Each user's earliest paid transaction, summed by currency.
+        first_purchases = (
+            select(
+                Transaction.currency.label("currency"),
+                Transaction.pricing["final_amount"].as_float().label("amount"),
+            )
+            .distinct(Transaction.user_id)
+            .join(User, User.id == Transaction.user_id)
+            .where(
+                User.ad_link_id == link_id,
+                Transaction.status == TransactionStatus.COMPLETED,
+                Transaction.pricing["final_amount"].as_float() > 0,
+            )
+            .order_by(Transaction.user_id, Transaction.created_at)
+            .subquery()
+        )
+        first_amounts_stmt = select(
+            first_purchases.c.currency,
+            func.sum(first_purchases.c.amount).label("total"),
+        ).group_by(first_purchases.c.currency)
+        first_amounts_rows = (await self.session.execute(first_amounts_stmt)).mappings().all()
+
+        first_purchase_revenue: dict[str, float] = {
+            row["currency"].symbol: float(row["total"] or 0) for row in first_amounts_rows
+        }
+
         return AdLinkStatsDto(
             registrations=registrations,
             trials=trials,
             buyers=buyers,
             trial_buyers=trial_buyers,
             revenue=revenue,
+            first_purchase_revenue=first_purchase_revenue,
         )

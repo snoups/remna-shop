@@ -368,6 +368,28 @@ class UserDeviceDeletedEvent(UserDevicesUpdatedEvent):
 
 
 @dataclass(frozen=True, kw_only=True)
+class UserAllDevicesDeletedEvent(UserEvent):
+    notification_type: NotificationType = field(
+        default=SystemNotificationType.USER_DEVICES_UPDATED,
+        init=False,
+    )
+
+    device_count: int
+
+    def as_payload(self) -> "MessagePayloadDto":
+        return MessagePayloadDto(
+            i18n_key=self.event_key,
+            i18n_kwargs={**asdict(self)},
+            disable_default_markup=False,
+            delete_after=None,
+        )
+
+    @property
+    def event_key(self) -> str:
+        return "event-user.all-devices-deleted"
+
+
+@dataclass(frozen=True, kw_only=True)
 class NodeEvent(SystemEvent):
     country: str
     name: str

@@ -34,8 +34,10 @@ class AddPlanDuration(Interactor[AddPlanDurationDto, PlanDto]):
             logger.warning(f"{actor.log} Duration '{days}' already exists in plan")
             raise DurationAlreadyExistsError(f"Duration '{days}' already exists")
 
+        next_order_index = max((d.order_index for d in data.plan.durations), default=0) + 1
         new_duration = PlanDurationDto(
             days=days,
+            order_index=next_order_index,
             prices=[PlanPriceDto(currency=c, price=DEFAULT_DURATION_PRICES[c]) for c in Currency],
         )
 

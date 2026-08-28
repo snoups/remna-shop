@@ -13,7 +13,14 @@ from src.application.use_cases.auth.commands.email import (
     RequestEmailVerificationDto,
 )
 from src.application.use_cases.auth.commands.login import LoginEmailUser, LoginEmailUserDto
-from src.application.use_cases.auth.commands.password import ChangePassword, ChangePasswordDto
+from src.application.use_cases.auth.commands.password import (
+    ChangePassword,
+    ChangePasswordDto,
+    ConfirmPasswordReset,
+    ConfirmPasswordResetDto,
+    RequestPasswordReset,
+    RequestPasswordResetDto,
+)
 from src.application.use_cases.auth.commands.register import (
     RegisterEmailUser,
     RegisterEmailUserDto,
@@ -36,12 +43,15 @@ from src.web.schemas import (
     ChangePasswordResponse,
     ConfirmEmailVerificationRequest,
     ConfirmEmailVerificationResponse,
+    ConfirmPasswordResetRequest,
     LoginRequest,
     LogoutResponse,
     MeResponse,
+    PasswordResetResponse,
     RegisterRequest,
     RequestEmailVerificationCodeRequest,
     RequestEmailVerificationCodeResponse,
+    RequestPasswordResetRequest,
     TelegramAuthRequest,
     TelegramWebAppAuthRequest,
 )
@@ -221,6 +231,34 @@ async def change_public_user_password(
     # All sessions were revoked; rotate the current device into a fresh session.
     await _issue_and_set(updated, response, config, auth_session)
     return ChangePasswordResponse(success=True)
+
+
+@router.post("/password/request-reset", response_model=PasswordResetResponse)
+@inject
+async def request_password_reset(
+    body: RequestPasswordResetRequest,
+    request_password_reset_uc: FromDishka[RequestPasswordReset],
+) -> PasswordResetResponse:
+    await request_password_reset_uc.system(RequestPasswordResetDto(email=body.email))
+    return PasswordResetResponse(success=True)
+
+
+@router.post("/password/confirm-reset", response_model=PasswordResetResponse)
+@inject
+async def confirm_password_reset(
+    body: ConfirmPasswordResetRequest,
+    response: Response,
+    confirm_password_reset_uc: FromDishka[ConfirmPasswordReset],
+) -> PasswordResetResponse:
+    await confirm_password_reset_uc.system(
+        ConfirmPasswordResetDto(
+            email=body.email,
+            code=body.code,
+            new_password=body.new_password,
+        )
+    )
+    clear_auth_cookies(response)
+    return PasswordResetResponse(success=True)
 
 
 @router.post("/email/change", response_model=ChangeEmailResponse)

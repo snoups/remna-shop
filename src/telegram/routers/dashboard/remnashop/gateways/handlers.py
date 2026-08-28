@@ -172,9 +172,7 @@ async def on_field_reset(
         ResetPaymentGatewaySettingsDto(gateway_id=gateway_id, field_name=selected_field),
     )
 
-    i18n_key = (
-        "ntf-gateway.field-reset-deactivated" if deactivated else "ntf-gateway.field-reset"
-    )
+    i18n_key = "ntf-gateway.field-reset-deactivated" if deactivated else "ntf-gateway.field-reset"
     await notifier.notify_user(user, i18n_key=i18n_key)
     await dialog_manager.switch_to(state=RemnashopGateways.SETTINGS)
 

@@ -6,10 +6,10 @@ from typing import Final
 from src.application.common.password_hasher import PasswordHasher
 from src.core.config import AppConfig
 from src.core.constants import (
-    PASSWORD_SCRYPT_DKLEN,
-    PASSWORD_SCRYPT_N,
-    PASSWORD_SCRYPT_P,
-    PASSWORD_SCRYPT_R,
+    PWD_HASH_SCRYPT_DKLEN,
+    PWD_HASH_SCRYPT_N,
+    PWD_HASH_SCRYPT_P,
+    PWD_HASH_SCRYPT_R,
 )
 from src.core.utils.encoding import b64url_decode, b64url_encode
 
@@ -31,13 +31,13 @@ class PasswordHasherImpl(PasswordHasher):
         digest = hashlib.scrypt(
             password=f"{password}:{self._key}".encode("utf-8"),
             salt=salt,
-            n=PASSWORD_SCRYPT_N,
-            r=PASSWORD_SCRYPT_R,
-            p=PASSWORD_SCRYPT_P,
-            dklen=PASSWORD_SCRYPT_DKLEN,
+            n=PWD_HASH_SCRYPT_N,
+            r=PWD_HASH_SCRYPT_R,
+            p=PWD_HASH_SCRYPT_P,
+            dklen=PWD_HASH_SCRYPT_DKLEN,
         )
         return (
-            f"scrypt${PASSWORD_SCRYPT_N}${PASSWORD_SCRYPT_R}${PASSWORD_SCRYPT_P}"
+            f"scrypt${PWD_HASH_SCRYPT_N}${PWD_HASH_SCRYPT_R}${PWD_HASH_SCRYPT_P}"
             f"${b64url_encode(salt)}${b64url_encode(digest)}"
         )
 

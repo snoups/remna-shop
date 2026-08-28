@@ -19,11 +19,11 @@ from src.core.enums import TransactionStatus
 from .base import BasePaymentGateway
 
 
-# https://mulenpay.ru/docs/api/
+# https://docs.mulenpay.com/
 class MulenPayGateway(BasePaymentGateway):
     _client: AsyncClient
 
-    API_BASE: Final[str] = "https://mulenpay.ru/api"
+    API_BASE: Final[str] = "https://api.mulenpay.com/api"
 
     DEFAULT_PAYMENT_SUBJECT: Final[int] = 4
     DEFAULT_PAYMENT_MODE: Final[int] = 4

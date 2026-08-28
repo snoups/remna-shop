@@ -57,9 +57,34 @@ class SubscriptionExpiredEvent(UserEvent):
 
 
 @dataclass(frozen=True, kw_only=True)
+class GraceActivatedEvent(UserEvent):
+    notification_type: NotificationType = field(
+        default=UserNotificationType.GRACE_ACTIVATED,
+        init=True,
+    )
+
+    is_trial: bool
+    traffic_mb: int
+    is_indefinite: bool
+    grace_until: Any
+
+    @property
+    def event_key(self) -> str:
+        return "event-subscription.grace-activated"
+
+    def as_payload(self) -> "MessagePayloadDto":
+        return MessagePayloadDto(
+            i18n_key=self.event_key,
+            i18n_kwargs={**asdict(self)},
+            disable_default_markup=False,
+            delete_after=None,
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
 class SubscriptionExpiredAgoEvent(UserEvent):
     notification_type: NotificationType = field(
-        default=UserNotificationType.EXPIRED_1_DAY_AGO,
+        default=UserNotificationType.EXPIRED,
         init=True,
     )
 
@@ -82,7 +107,7 @@ class SubscriptionExpiredAgoEvent(UserEvent):
 @dataclass(frozen=True, kw_only=True)
 class SubscriptionExpiresEvent(UserEvent):
     notification_type: NotificationType = field(
-        default=UserNotificationType.EXPIRES_IN_1_DAY,
+        default=UserNotificationType.EXPIRES,
         init=True,
     )
 

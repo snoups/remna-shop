@@ -36,6 +36,7 @@ def setup_routers(router: Router) -> None:
         dashboard.remnashop.backup.dialog.router,
         dashboard.remnashop.advertising.dialog.router,
         dashboard.remnashop.extra.dialog.router,
+        dashboard.remnashop.grace.dialog.router,
         #
         dashboard.users.dialog.router,
         dashboard.users.user.dialog.router,

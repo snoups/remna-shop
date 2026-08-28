@@ -31,7 +31,7 @@ from src.application.use_cases.user.commands.profile_edit import ResetOwnReferra
 from src.application.use_cases.user.queries.plans import GetAvailableTrial
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
-from src.core.exceptions import CooldownError
+from src.core.exceptions import CooldownError, TrialNotAvailableError
 from src.core.utils.i18n_helpers import i18n_format_expire_time
 from src.core.utils.time import get_traffic_reset_delta
 from src.telegram.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
@@ -90,8 +90,13 @@ async def on_get_trial(
     plan = await get_available_trial.system(user)
 
     if not plan:
+        # Trial button came from a stale menu (bot restart / late re-click). Re-render the menu
+        # so the outdated button disappears, then inform the user — this is expected, not an error.
+        logger.info(f"{user.log} Trial no longer available at click time")
         await notifier.notify_user(user=user, i18n_key="ntf-common.trial-unavailable")
-        raise ValueError("Trial plan not exist")
+        if user.telegram_id is not None:
+            await redirect.to_main_menu(user.telegram_id)
+        return
 
     settings = await settings_dao.get()
     currency = settings.default_currency
@@ -102,6 +107,13 @@ async def on_get_trial(
 
         try:
             await activate_trial_subscription.system(ActivateTrialSubscriptionDto(user, trial))
+        except TrialNotAvailableError:
+            # Concurrent double-click: another click already activated the trial. It exists, so
+            # route to success instead of a misleading failure screen.
+            logger.info(f"{user.log} Trial already activated (double-click)")
+            if user.telegram_id is not None:
+                await redirect.to_success_trial(user.telegram_id)
+            return
         except Exception:
             logger.exception(f"{user.log} Trial activation failed")
             if user.telegram_id is not None:

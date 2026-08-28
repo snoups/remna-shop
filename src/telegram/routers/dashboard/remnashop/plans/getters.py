@@ -75,6 +75,7 @@ async def configurator_getter(
             durations=[
                 PlanDurationDto(
                     days=7,
+                    order_index=1,
                     prices=[
                         PlanPriceDto(currency=Currency.USD, price=Decimal(0.5)),
                         PlanPriceDto(currency=Currency.XTR, price=Decimal(30)),
@@ -83,6 +84,7 @@ async def configurator_getter(
                 ),
                 PlanDurationDto(
                     days=30,
+                    order_index=2,
                     prices=[
                         PlanPriceDto(currency=Currency.USD, price=Decimal(1)),
                         PlanPriceDto(currency=Currency.XTR, price=Decimal(60)),
@@ -91,6 +93,7 @@ async def configurator_getter(
                 ),
                 PlanDurationDto(
                     days=365,
+                    order_index=3,
                     prices=[
                         PlanPriceDto(currency=Currency.USD, price=Decimal(10)),
                         PlanPriceDto(currency=Currency.XTR, price=Decimal(600)),
@@ -99,6 +102,7 @@ async def configurator_getter(
                 ),
                 PlanDurationDto(
                     days=0,
+                    order_index=4,
                     prices=[
                         PlanPriceDto(currency=Currency.USD, price=Decimal(100)),
                         PlanPriceDto(currency=Currency.XTR, price=Decimal(6000)),

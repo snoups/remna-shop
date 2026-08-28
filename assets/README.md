@@ -182,7 +182,7 @@ The fallback text inside the tag (a plain emoji) is shown on clients that don't 
 
 ## Usage in buttons
 
-Both formats are automatically recognized by the `Emoji*` widgets (`EmojiButton`, `EmojiSwitchTo`, `EmojiBack`, etc.) when rendering keyboards. The custom emoji is extracted from the key text and passed as `icon_custom_emoji_id` on the Telegram button — it is a separate field, not part of the label.
+Both formats are automatically recognized for **every** keyboard button, regardless of the widget used. The tag is processed globally in `MessageManager.show_message` before the message is sent: the custom emoji is extracted from the key text and passed as `icon_custom_emoji_id` on the Telegram button — it is a separate field, not part of the label.
 
 Example in `buttons.ftl`:
 
@@ -204,6 +204,25 @@ msg-statistics-main = <e id="5231200819986047254">📊</e> <b>Statistics</b>
 ## Emoji priority
 
 If a button already has `icon_custom_emoji_id` set via the widget's `Style` (aiogram-dialog `Style(icon_custom_emoji_id="...")`), it takes priority over the emoji from the key text.
+
+---
+
+# `Button Color`
+
+Telegram inline buttons support a `style` (color): `primary`, `success`, `danger`. It can be set directly from a `.ftl` key value via the `<c>` tag, applied globally to every keyboard button (same mechanism as custom emoji).
+
+## Syntax
+
+```ftl
+btn-buy = <c>success</c>🛒 Buy
+btn-cancel = <c>danger</c>Cancel
+```
+
+The tag is stripped from the label and mapped to the button's `style` field. It can be combined with a custom emoji tag on the same button.
+
+## Color priority
+
+Unlike custom emoji, a color from the key text **overrides** any `Style(ButtonStyle.…)` set in Python code. This lets translations recolor buttons without touching handlers. Reply-keyboard buttons don't support colors — the tag is simply stripped there.
 
 ---
 

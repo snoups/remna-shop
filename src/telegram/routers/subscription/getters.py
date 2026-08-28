@@ -42,6 +42,15 @@ async def subscription_getter(
     return {
         "has_active_subscription": has_active,
         "is_not_unlimited": not is_unlimited,
+        "is_grace": bool(current_subscription and current_subscription.is_grace),
+        "is_grace_indefinite": bool(
+            current_subscription and current_subscription.is_grace_indefinite
+        ),
+        "grace_until": (
+            i18n_format_expire_time(current_subscription.grace_until)
+            if current_subscription and current_subscription.grace_until
+            else None
+        ),
     }
 
 

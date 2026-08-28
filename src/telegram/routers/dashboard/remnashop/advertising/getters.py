@@ -92,6 +92,14 @@ async def stats_getter(
         or "• <b>Доход</b>: —"
     )
 
+    first_revenue_lines = (
+        "\n".join(
+            f"• <b>Доход ({currency})</b>: {amount:.2f}"
+            for currency, amount in stats.first_purchase_revenue.items()
+        )
+        or "• <b>Доход</b>: —"
+    )
+
     return {
         "name": link.name,
         "registrations": stats.registrations,
@@ -100,4 +108,5 @@ async def stats_getter(
         "reg_to_buy_rate": stats.reg_to_buy_rate,
         "trial_to_buy_rate": stats.trial_to_buy_rate,
         "revenue_lines": revenue_lines,
+        "first_revenue_lines": first_revenue_lines,
     }

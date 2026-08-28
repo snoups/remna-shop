@@ -24,3 +24,4 @@ class Settings(BaseSql, TimestampMixin):
     backup: Mapped[dict[str, Any]]
     blacklist: Mapped[dict[str, Any]]
     extra: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    grace: Mapped[dict[str, Any]] = mapped_column(JSONB)

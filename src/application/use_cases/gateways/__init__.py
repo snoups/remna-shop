@@ -13,11 +13,14 @@ from .commands.payment import (
     CreatePayment,
     CreateTestPayment,
     ProcessPayment,
+    RetryFailedTransaction,
 )
 from .queries.providers import GetPaymentGatewayInstance
+from .queries.stars import IsStarsPaymentBlocked
 
 GATEWAYS_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     GetPaymentGatewayInstance,
+    IsStarsPaymentBlocked,
     MovePaymentGatewayUp,
     TogglePaymentGatewayActive,
     UpdatePaymentGatewaySettings,
@@ -26,4 +29,5 @@ GATEWAYS_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     CreatePayment,
     CreateTestPayment,
     ProcessPayment,
+    RetryFailedTransaction,
 )

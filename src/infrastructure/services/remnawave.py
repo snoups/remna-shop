@@ -1,11 +1,13 @@
 import asyncio
 from dataclasses import fields, is_dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional, Union
+from uuid import UUID
 
 from loguru import logger
 from packaging.version import Version
 from remnapy import RemnawaveSDK
+from remnapy.enums import TrafficLimitStrategy
 from remnapy.exceptions import AuthenticationError, ConflictError, NotFoundError
 from remnapy.models import (
     CreateUserRequestDto,
@@ -128,6 +130,33 @@ class RemnawaveImpl(Remnawave):
         if reset_traffic:
             await self.reset_traffic(user_id)
 
+        return remna_user
+
+    async def apply_grace(
+        self,
+        user_id: int,
+        expire_at: datetime,
+        internal_squads: list[UUID],
+        external_squad: Optional[UUID],
+        traffic_bytes: int,
+        traffic_strategy: TrafficLimitStrategy,
+        tag: Optional[str],
+        device_limit: int,
+    ) -> UserResponseDto:
+        request_dto = UpdateUserRequestDto(
+            id=user_id,
+            expire_at=expire_at,
+            status=SubscriptionStatus.ACTIVE,
+            traffic_limit_strategy=traffic_strategy,
+            traffic_limit_bytes=traffic_bytes,
+            hwid_device_limit=device_limit,
+            tag=tag,
+            active_internal_squads=internal_squads,
+            external_squad_uuid=external_squad,
+        )
+        remna_user = await self.sdk.users.update_user(request_dto)
+        await self.reset_traffic(user_id)
+        logger.info(f"Applied grace to RemnaUser '{user_id}'")
         return remna_user
 
     async def enable_user(self, user_id: int) -> None:

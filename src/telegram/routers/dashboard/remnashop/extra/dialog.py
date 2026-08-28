@@ -3,7 +3,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from magic_filter import F
 
 from src.core.enums import BannerName
-from src.telegram.states import DashboardRemnashop, RemnashopExtra
+from src.telegram.states import DashboardRemnashop, RemnashopExtra, RemnashopGrace
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import Button, Row, Start, SwitchTo
 
@@ -11,6 +11,7 @@ from .getters import extra_getter
 from .handlers import (
     on_cooldown_input,
     on_mini_app_reserve_toggle,
+    on_stars_paid_requirement_toggle,
     on_toggle,
     on_trial_channel_guard_toggle,
 )
@@ -18,6 +19,13 @@ from .handlers import (
 main = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-extra-main"),
+    Row(
+        Start(
+            text=I18nFormat("btn-remnashop-extra.grace", enabled=F["grace_enabled"]),
+            id="grace",
+            state=RemnashopGrace.MAIN,
+        ),
+    ),
     Row(
         SwitchTo(
             text=I18nFormat(
@@ -76,6 +84,16 @@ main = Window(
             ),
             id="mini_app_reserve",
             state=RemnashopExtra.MINI_APP_RESERVE,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat(
+                "btn-remnashop-extra.stars-paid-requirement",
+                enabled=F["stars_paid_requirement_enabled"],
+            ),
+            id="stars_paid_requirement",
+            state=RemnashopExtra.STARS_PAID_REQUIREMENT,
         ),
     ),
     Row(
@@ -255,6 +273,34 @@ mini_app_reserve = Window(
     getter=extra_getter,
 )
 
+stars_paid_requirement = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat(
+        "msg-extra-stars-paid-requirement",
+        enabled=F["stars_paid_requirement_enabled"],
+    ),
+    Row(
+        Button(
+            text=I18nFormat(
+                "btn-remnashop-extra.toggle",
+                enabled=F["stars_paid_requirement_enabled"],
+            ),
+            id="stars_paid_requirement_toggle",
+            on_click=on_stars_paid_requirement_toggle,
+        ),
+    ),
+    Row(
+        SwitchTo(
+            text=I18nFormat("btn-back.general"),
+            id="back",
+            state=RemnashopExtra.MAIN,
+        ),
+    ),
+    IgnoreUpdate(),
+    state=RemnashopExtra.STARS_PAID_REQUIREMENT,
+    getter=extra_getter,
+)
+
 router = Dialog(
     main,
     device_single,
@@ -263,4 +309,5 @@ router = Dialog(
     referral_reset,
     trial_channel_guard,
     mini_app_reserve,
+    stars_paid_requirement,
 )

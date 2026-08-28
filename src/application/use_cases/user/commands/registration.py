@@ -183,7 +183,7 @@ class GetOrCreateUser(Interactor[GetOrCreateUserDto, Optional[UserDto]]):
             telegram_id=data.telegram_id,
             username=data.username,
             referral_code=referral_code,
-            name=data.full_name,
+            name=user_name_clean(data.full_name, data.telegram_id),
             role=role if role is not None else data.role,
             language=locale,
             is_blocked=is_blocked,

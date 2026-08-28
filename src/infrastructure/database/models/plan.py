@@ -42,7 +42,7 @@ class Plan(BaseSql, TimestampMixin):
         back_populates="plan",
         cascade="all, delete-orphan",
         lazy="selectin",
-        order_by="PlanDuration.order_index",
+        order_by="PlanDuration.order_index, PlanDuration.id",
     )
 
 

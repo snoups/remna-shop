@@ -162,6 +162,22 @@ class TransactionDaoImpl(TransactionDao):
         logger.debug(f"Transaction '{payment_id}' existence status is '{is_exists}'")
         return is_exists
 
+    async def has_paid_purchase_excluding_stars(self, user_id: int) -> bool:
+        stmt = select(
+            select(Transaction)
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.status == TransactionStatus.COMPLETED,
+                Transaction.is_test.is_(False),
+                Transaction.gateway_type != PaymentGatewayType.TELEGRAM_STARS,
+            )
+            .exists()
+        )
+        result = await self.session.scalar(stmt) or False
+
+        logger.debug(f"User '{user_id}' has non-stars paid purchase: '{result}'")
+        return result
+
     async def cancel_old(self, minutes: int = 30) -> int:
         threshold = datetime_now() - timedelta(minutes=minutes)
 

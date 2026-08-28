@@ -38,6 +38,7 @@ from src.application.dto.payment_gateway import (
     PaymentGatewayDto,
     PlategaGatewaySettingsDto,
     RoboKassaGatewaySettingsDto,
+    RollyPaySettingsDto,
     TelegramStarsGatewaySettingsDto,
     UrlPayGatewaySettingsDto,
     ValutixGatewaySettingsDto,
@@ -63,7 +64,7 @@ from src.core.enums import (
     SystemNotificationType,
     TransactionStatus,
 )
-from src.core.exceptions import PurchaseError
+from src.core.exceptions import PurchaseError, TransactionNotRetryableError
 from src.core.utils.i18n_helpers import (
     i18n_format_days,
     i18n_format_device_limit,
@@ -102,6 +103,7 @@ class CreateDefaultPaymentGateway(Interactor[None, None]):
                     PaymentGatewayType.PAYMASTER: PayMasterGatewaySettingsDto,
                     PaymentGatewayType.PLATEGA: PlategaGatewaySettingsDto,
                     PaymentGatewayType.ROBOKASSA: RoboKassaGatewaySettingsDto,
+                    PaymentGatewayType.ROLLYPAY: RollyPaySettingsDto,
                     PaymentGatewayType.URLPAY: UrlPayGatewaySettingsDto,
                     PaymentGatewayType.VALUTIX: ValutixGatewaySettingsDto,
                     PaymentGatewayType.WATA: WataGatewaySettingsDto,
@@ -536,3 +538,39 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
 
         if user.telegram_id is not None:
             await self.redirect.to_success_payment(user.telegram_id, transaction.purchase_type)
+
+
+class RetryFailedTransaction(Interactor[UUID, None]):
+    required_permission = Permission.USER_SUBSCRIPTION_EDITOR
+
+    def __init__(
+        self,
+        transaction_dao: TransactionDao,
+        process_payment: ProcessPayment,
+    ) -> None:
+        self.transaction_dao = transaction_dao
+        self.process_payment = process_payment
+
+    async def _execute(self, actor: UserDto, payment_id: UUID) -> None:
+        transaction = await self.transaction_dao.get_by_payment_id(payment_id)
+
+        if not transaction:
+            raise ValueError(f"Transaction not found for '{payment_id}'")
+
+        if transaction.status != TransactionStatus.FAILED:
+            raise TransactionNotRetryableError(
+                f"Transaction '{payment_id}' is not FAILED (status '{transaction.status}')"
+            )
+
+        logger.info(
+            f"{actor.log} Retrying failed transaction '{payment_id}' "
+            f"for user '{transaction.user_id}'"
+        )
+
+        await self.process_payment.system(
+            ProcessPaymentDto(
+                payment_id=payment_id,
+                new_transaction_status=TransactionStatus.COMPLETED,
+                gateway_type=transaction.gateway_type,
+            )
+        )

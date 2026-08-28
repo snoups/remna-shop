@@ -1,4 +1,5 @@
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Annotated
@@ -12,8 +13,14 @@ from src.application.common.dao import UserDao
 from src.application.common.dao.auth import AuthSessionDao
 from src.application.dto import UserDto
 from src.core.config import AppConfig
-from src.core.constants import ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS
+from src.core.constants import AUTH_ACCESS_TOKEN_TTL_SECONDS, AUTH_REFRESH_TOKEN_TTL_SECONDS
 from src.web.schemas import AuthResponse
+
+
+@dataclass(frozen=True)
+class AccessTokenClaims:
+    user_id: int
+    token_version: int
 
 
 def _normalize_decimal_str(value: Decimal) -> str:
@@ -23,19 +30,28 @@ def _normalize_decimal_str(value: Decimal) -> str:
     return format(normalized, "f")
 
 
-def generate_access_token(user_id: int, key: str) -> tuple[str, datetime]:
+def generate_access_token(user_id: int, token_version: int, key: str) -> tuple[str, datetime]:
     now = datetime.now(tz=timezone.utc)
-    exp = now + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS)
-    token = jwt.encode({"sub": user_id, "iat": now, "exp": exp}, key, algorithm="HS256")
+    exp = now + timedelta(seconds=AUTH_ACCESS_TOKEN_TTL_SECONDS)
+    token = jwt.encode(
+        {"sub": user_id, "ver": token_version, "iat": now, "exp": exp},
+        key,
+        algorithm="HS256",
+    )
     return token, exp
 
 
-def decode_access_token(token: str, key: str) -> int:
+def decode_access_token(token: str, key: str) -> AccessTokenClaims:
     payload = jwt.decode(token, key, algorithms=["HS256"], options={"verify_sub": False})
     try:
-        return int(payload["sub"])
+        user_id = int(payload["sub"])
     except (KeyError, TypeError, ValueError) as e:
         raise jwt.InvalidTokenError("Invalid 'sub' claim") from e
+    try:
+        token_version = int(payload.get("ver", 0))
+    except (TypeError, ValueError) as e:
+        raise jwt.InvalidTokenError("Invalid 'ver' claim") from e
+    return AccessTokenClaims(user_id=user_id, token_version=token_version)
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
@@ -45,7 +61,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
         httponly=True,
         secure=True,
         samesite="lax",
-        max_age=ACCESS_TOKEN_TTL_SECONDS,
+        max_age=AUTH_ACCESS_TOKEN_TTL_SECONDS,
     )
     response.set_cookie(
         "refresh_token",
@@ -53,7 +69,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
         httponly=True,
         secure=True,
         samesite="lax",
-        max_age=REFRESH_TOKEN_TTL_SECONDS,
+        max_age=AUTH_REFRESH_TOKEN_TTL_SECONDS,
     )
 
 
@@ -72,15 +88,19 @@ async def issue_session(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="JWT secret not configured",
         )
-    access_token, expires_at = generate_access_token(user.id, config.jwt_secret.get_secret_value())
+    access_token, expires_at = generate_access_token(
+        user.id,
+        user.token_version,
+        config.jwt_secret.get_secret_value(),
+    )
     refresh_token = secrets.token_urlsafe(32)
     refresh_expires_at = datetime.now(tz=timezone.utc) + timedelta(
-        seconds=REFRESH_TOKEN_TTL_SECONDS
+        seconds=AUTH_REFRESH_TOKEN_TTL_SECONDS
     )
     await auth_session.store_refresh_token(
         token=refresh_token,
         user_id=user.id,
-        ttl=REFRESH_TOKEN_TTL_SECONDS,
+        ttl=AUTH_REFRESH_TOKEN_TTL_SECONDS,
     )
     return (
         access_token,
@@ -111,14 +131,18 @@ async def _get_current_user(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="JWT secret not configured",
             )
-        user_id = decode_access_token(token, config.jwt_secret.get_secret_value())
+        claims = decode_access_token(token, config.jwt_secret.get_secret_value())
     except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
         )
-    user = await user_dao.get_by_id(user_id)
+    user = await user_dao.get_by_id(claims.user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    if claims.token_version != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+        )
     if user.is_blocked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
     return user

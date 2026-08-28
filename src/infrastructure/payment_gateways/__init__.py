@@ -7,6 +7,7 @@ from .mulen_pay import MulenPayGateway
 from .pay_master import PayMasterGateway
 from .platega import PlategaGateway
 from .robokassa import RobokassaGateway
+from .rollypay import RollyPayGateway
 from .telegram_stars import TelegramStarsGateway
 from .url_pay import UrlPayGateway
 from .valutix import ValutixGateway
@@ -25,6 +26,7 @@ __all__ = [
     "PayMasterGateway",
     "PlategaGateway",
     "RobokassaGateway",
+    "RollyPayGateway",
     "TelegramStarsGateway",
     "UrlPayGateway",
     "ValutixGateway",

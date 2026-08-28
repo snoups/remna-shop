@@ -50,5 +50,6 @@ class Subscription(BaseSql, TimestampMixin):
     link_reset_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    grace_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(foreign_keys=[user_id])

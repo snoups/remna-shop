@@ -8,7 +8,7 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
-from src.application.common import Notifier
+from src.application.common import Notifier, TranslatorRunner
 from src.application.common.dao import PaymentGatewayDao, PlanDao, SettingsDao, SubscriptionDao
 from src.application.dto import PlanDto, PlanSnapshotDto, SubscriptionDto, TelegramUserDto
 from src.application.services import PricingService
@@ -18,6 +18,7 @@ from src.application.use_cases.gateways.commands.payment import (
     ProcessPayment,
     ProcessPaymentDto,
 )
+from src.application.use_cases.gateways.queries.stars import IsStarsPaymentBlocked
 from src.application.use_cases.plan.queries.match import MatchPlan, MatchPlanDto
 from src.application.use_cases.user.queries.plans import GetAvailablePlans
 from src.core.constants import PAYMENT_PREFIX, USER_KEY
@@ -215,6 +216,7 @@ async def on_subscription_plans(  # noqa: C901
     match_plan: FromDishka[MatchPlan],
     get_available_plans: FromDishka[GetAvailablePlans],
     create_payment: FromDishka[CreatePayment],
+    is_stars_payment_blocked: FromDishka[IsStarsPaymentBlocked],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Opened subscription plans menu")
@@ -260,6 +262,15 @@ async def on_subscription_plans(  # noqa: C901
             dialog_manager.dialog_data["only_single_duration"] = True
 
             if len(gateways) == 1:
+                if gateways[0].type == PaymentGatewayType.TELEGRAM_STARS and (
+                    await is_stars_payment_blocked.system(user)
+                ):
+                    logger.info(f"{user.log} Stars payment blocked (single gateway)")
+                    await notifier.notify_user(
+                        user, i18n_key="ntf-subscription.stars-requires-paid"
+                    )
+                    return
+
                 logger.info(f"{user.log} Auto-selected payment method '{gateways[0].type}'")
                 dialog_manager.dialog_data["selected_payment_method"] = gateways[0].type
                 dialog_manager.dialog_data["only_single_payment_method"] = True
@@ -339,6 +350,7 @@ async def on_duration_select(
     notifier: FromDishka[Notifier],
     pricing_service: FromDishka[PricingService],
     create_payment: FromDishka[CreatePayment],
+    is_stars_payment_blocked: FromDishka[IsStarsPaymentBlocked],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Selected subscription duration '{selected_duration}' days")
@@ -368,6 +380,15 @@ async def on_duration_select(
     dialog_manager.dialog_data["is_free"] = price.is_free
 
     if len(gateways) == 1 or price.is_free:
+        if (
+            gateways[0].type == PaymentGatewayType.TELEGRAM_STARS
+            and not price.is_free
+            and (await is_stars_payment_blocked.system(user))
+        ):
+            logger.info(f"{user.log} Stars payment blocked (single gateway, duration select)")
+            await notifier.notify_user(user, i18n_key="ntf-subscription.stars-requires-paid")
+            return
+
         selected_payment_method = gateways[0].type
         dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method
 
@@ -416,9 +437,21 @@ async def on_payment_method_select(
     notifier: FromDishka[Notifier],
     pricing_service: FromDishka[PricingService],
     create_payment: FromDishka[CreatePayment],
+    is_stars_payment_blocked: FromDishka[IsStarsPaymentBlocked],
+    i18n: FromDishka[TranslatorRunner],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Selected payment method '{selected_payment_method}'")
+
+    if selected_payment_method == PaymentGatewayType.TELEGRAM_STARS and (
+        await is_stars_payment_blocked.system(user)
+    ):
+        logger.info(f"{user.log} Stars payment blocked at method select")
+        await callback.answer(
+            text=i18n.get("ntf-subscription.stars-requires-paid"),
+            show_alert=True,
+        )
+        return
 
     selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method

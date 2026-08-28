@@ -8,7 +8,7 @@ from pydantic_core.core_schema import FieldValidationInfo
 from src.core.constants import API_V1, ASSETS_DEFAULT_DIR, ASSETS_DIR, PAYMENTS_WEBHOOK_PATH
 from src.core.enums import Locale, PaymentGatewayType
 from src.core.types import LocaleList, StringList
-from src.core.utils.validators import is_valid_domain
+from src.core.utils.validators import is_valid_domain, is_valid_url
 
 from .base import BaseConfig
 from .bot import BotConfig
@@ -99,6 +99,14 @@ class AppConfig(BaseConfig, env_prefix="APP_"):
             raise ValueError("APP_DOMAIN has invalid format")
 
         return field
+
+    @field_validator("web_cabinet_url")
+    @classmethod
+    def validate_web_cabinet_url(cls, value: str) -> str:
+        url = value.strip()
+        if url and not is_valid_url(url):
+            raise ValueError("WEB_CABINET_URL must be an HTTPS URL")
+        return url
 
     @field_validator("crypt_key")
     @classmethod

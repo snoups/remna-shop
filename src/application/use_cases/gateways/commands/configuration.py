@@ -151,9 +151,7 @@ class ResetPaymentGatewaySettingsField(Interactor[ResetPaymentGatewaySettingsDto
 
             settings_type = type(gateway.settings)
             if data.field_name not in get_type_hints(settings_type):
-                raise ValueError(
-                    f"Field '{data.field_name}' not found in {settings_type.__name__}"
-                )
+                raise ValueError(f"Field '{data.field_name}' not found in {settings_type.__name__}")
 
             setattr(gateway.settings, data.field_name, None)
 

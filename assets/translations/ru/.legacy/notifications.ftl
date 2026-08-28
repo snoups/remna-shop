@@ -8,7 +8,7 @@ ntf-error =
     .lost-context-restart = ⚠️ <i>Произошла ошибка. Диалог перезапущен.</i>
 
 ntf-common =
-    .trial-unavailable = ⚠️ <i>Пробная подписка временно недоступна.</i>
+    .trial-unavailable = ⚠️ <i>Пробная подписка недоступна.</i>
     .throttling = ⚠️ <i>Вы отправляете слишком много запросов. Пожалуйста, подождите.</i>
     .double-click-confirm = ⚠️ <i>Нажмите еще раз, чтобы подтвердить действие.</i>
     .squads-empty = ⚠️ <i>Сквады не найдены. Проверьте их наличие в панели.</i>
@@ -58,6 +58,9 @@ ntf-requirement =
 ntf-user =
     .not-found = <i>❌ Пользователь не найден.</i>
     .transaction-not-found = ❌ <i>Транзакция не найдена.</i>
+    .transaction-granted = ✅ <i>Подписка выдана, транзакция завершена.</i>
+    .transaction-grant-failed = ⚠️ <i>Не удалось выдать подписку — транзакция осталась ошибочной.</i>
+    .transaction-grant-stale = ℹ️ <i>Транзакция уже обработана.</i>
     .transactions-empty = ❌ <i>Список транзакций пуст.</i>
     .subscription-empty = ❌ <i>Активная подписка не найдена.</i>
     .subscription-deleted = ✅ <i>Подписка успешно удалена.</i>
@@ -112,13 +115,14 @@ ntf-gateway =
     .test-payment-error = ❌ <i>Ошибка при создании тестового платежа.</i>
     .test-payment-confirmed = ✅ <i>Тестовый платеж успешно обработан.</i>
     .field-reset = ✅ <i>Значение поля очищено.</i>
-    .field-reset-deactivated = ✅ <i>Значение поля очищено. Шлюз отключён: не хватает обязательных настроек.</i>
+    .field-reset-deactivated = ✅ <i>Значение поля очищено. Шлюз отключен: не хватает обязательных настроек.</i>
 
 ntf-subscription =
     .plans-unavailable = ❌ <i>В данный момент нет доступных планов.</i>
     .gateways-unavailable = ❌ <i>В данный момент нет доступных платежных систем.</i>
     .renew-plan-unavailable = ❌ <i>Текущий план устарел и недоступен для продления.</i>
     .payment-creation-failed = ❌ <i>Ошибка при создании платежа. Попробуйте позже.</i>
+    .stars-requires-paid = ❌ <i>Оплата через Telegram Stars доступна только после покупки другим способом.</i>
 
 ntf-broadcast =
     .text-too-long = ❌ Превышено максимальное кол-во символов ({ $max_limit }).
@@ -201,7 +205,7 @@ ntf-promocode =
     .created = ✅ <i>Промокод создан.</i>
     .deleted = ✅ <i>Промокод удален.</i>
     .fields-required = ❌ <i>Заполните значение награды.</i>
-    .invalid-code = ❌ <i>Код может содержать только латинские буквы, цифры, дефис и подчёркивание.</i>
+    .invalid-code = ❌ <i>Код может содержать только латинские буквы, цифры, дефис и подчеркивание.</i>
     .plans-empty = ❌ <i>Нет доступных планов.</i>
     .updated = ✅ <i>Промокод обновлен.</i>
 

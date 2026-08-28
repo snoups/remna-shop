@@ -166,6 +166,18 @@ class ValutixGatewaySettingsDto(GatewaySettingsDto):
     api_key: Optional[SecretStr] = None
 
 
+@dataclass(kw_only=True)
+class RollyPaySettingsDto(GatewaySettingsDto):
+    type: Literal[PaymentGatewayType.ROLLYPAY] = PaymentGatewayType.ROLLYPAY
+    api_key: Optional[SecretStr] = None
+    signing_secret: Optional[SecretStr] = None
+    payment_method: Optional[str] = None
+
+    @property
+    def is_configured(self) -> bool:
+        return self.api_key is not None and self.signing_secret is not None
+
+
 AnyGatewaySettingsDto = Union[
     TelegramStarsGatewaySettingsDto,
     YooKassaGatewaySettingsDto,
@@ -178,6 +190,7 @@ AnyGatewaySettingsDto = Union[
     PayMasterGatewaySettingsDto,
     PlategaGatewaySettingsDto,
     RoboKassaGatewaySettingsDto,
+    RollyPaySettingsDto,
     UrlPayGatewaySettingsDto,
     WataGatewaySettingsDto,
     ValutixGatewaySettingsDto,

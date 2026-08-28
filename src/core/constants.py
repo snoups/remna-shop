@@ -90,20 +90,30 @@ BATCH_DELAY: Final[int] = 1
 TEXT_MAX_LENGTH: Final[int] = 4096
 TEXT_MEDIA_MAX_LENGTH: Final[int] = 1024
 
-PASSWORD_SCRYPT_N: Final[int] = 2**14
-PASSWORD_SCRYPT_R: Final[int] = 8
-PASSWORD_SCRYPT_P: Final[int] = 1
-PASSWORD_SCRYPT_DKLEN: Final[int] = 64
-ACCESS_TOKEN_TTL_SECONDS: Final[int] = 900  # 15 minutes
-REFRESH_TOKEN_TTL_SECONDS: Final[int] = 60 * 60 * 24 * 30  # 30 days
-TELEGRAM_AUTH_MAX_AGE_SECONDS: Final[int] = 600  # 10 minutes
-PUBLIC_LANDING_PLANS_CACHE_TTL_SECONDS: Final[int] = 21600
-EMAIL_VERIFICATION_CODE_LENGTH: Final[int] = 6
-EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: Final[int] = 60
+PWD_HASH_SCRYPT_N: Final[int] = 2**14
+PWD_HASH_SCRYPT_R: Final[int] = 8
+PWD_HASH_SCRYPT_P: Final[int] = 1
+PWD_HASH_SCRYPT_DKLEN: Final[int] = 64
+
+AUTH_ACCESS_TOKEN_TTL_SECONDS: Final[int] = TIME_1M * 15
+AUTH_REFRESH_TOKEN_TTL_SECONDS: Final[int] = TIME_1D * 30
+AUTH_TELEGRAM_MAX_AGE_SECONDS: Final[int] = TIME_1M * 10
+
+EMAIL_CODE_LENGTH: Final[int] = 6
+EMAIL_CODE_RESEND_COOLDOWN_SECONDS: Final[int] = TIME_1M
+EMAIL_CODE_MAX_ATTEMPTS: Final[int] = 5
 EMAIL_VERIFICATION_SUBJECT: Final[str] = "Your verification code"
 EMAIL_VERIFICATION_BODY_TEMPLATE: Final[str] = (
     "Your verification code is: {code}\n\n"
     "It is valid for {minutes} minutes. If you did not request this, ignore this email."
 )
-WEB_PASSWORD_LEN: Final[int] = 8
+EMAIL_PASSWORD_RESET_SUBJECT: Final[str] = "Your password reset code"
+EMAIL_PASSWORD_RESET_BODY_TEMPLATE: Final[str] = (
+    "Your password reset code is: {code}\n\n"
+    "It is valid for {minutes} minutes. If you did not request this, ignore this email."
+)
+
+WEB_PASSWORD_LENGTH: Final[int] = 8
 WEB_PASSWORD_ALPHABET: Final[str] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+PUBLIC_LANDING_PLANS_CACHE_TTL_SECONDS: Final[int] = TTL_6H

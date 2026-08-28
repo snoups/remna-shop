@@ -187,6 +187,7 @@ stats = Window(
         reg_to_buy_rate=F["reg_to_buy_rate"],
         trial_to_buy_rate=F["trial_to_buy_rate"],
         revenue_lines=F["revenue_lines"],
+        first_revenue_lines=F["first_revenue_lines"],
     ),
     Row(
         SwitchTo(

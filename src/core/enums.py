@@ -96,6 +96,7 @@ class PaymentGatewayType(UpperStrEnum):
     ROBOKASSA = auto()
     URLPAY = auto()
     WATA = auto()
+    ROLLYPAY = auto()
 
 
 class PurchaseType(UpperStrEnum):
@@ -262,15 +263,13 @@ class SystemNotificationType(UpperStrEnum):
 
 
 class UserNotificationType(UpperStrEnum):
-    EXPIRES_IN_3_DAYS = auto()
-    EXPIRES_IN_2_DAYS = auto()
-    EXPIRES_IN_1_DAY = auto()
+    EXPIRES = auto()
     #
     EXPIRED = auto()
-    EXPIRED_1_DAY_AGO = auto()
     LIMITED = auto()
     NOT_CONNECTED = auto()
     TORRENT_BLOCKED = auto()
+    GRACE_ACTIVATED = auto()
     #
     REFERRAL_ATTACHED = auto()
     REFERRAL_REWARD_RECEIVED = auto()
@@ -320,6 +319,7 @@ class Currency(UpperStrEnum):
             PaymentGatewayType.PAYMASTER: cls.RUB,
             PaymentGatewayType.PLATEGA: cls.RUB,
             PaymentGatewayType.ROBOKASSA: cls.RUB,
+            PaymentGatewayType.ROLLYPAY: cls.RUB,
             PaymentGatewayType.URLPAY: cls.RUB,
             PaymentGatewayType.WATA: cls.RUB,
             PaymentGatewayType.VALUTIX: cls.RUB,

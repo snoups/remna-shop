@@ -73,20 +73,30 @@ class ValidatePromocode(Interactor[ValidatePromocodeDto, PromocodeDto]):
                 raise PromocodeAlreadyActivatedError("Promocode already activated")
 
         if promo.reward_type in SUBSCRIPTION_REQUIRED_REWARDS:
-            current = await self.subscription_dao.get_current(user.id)
-            if current is None or not current.is_active:
-                # An expired/disabled subscription has expire_at in the past; extending it
-                # would push a past date to the panel, which rejects it. Require an active sub.
-                logger.info(f"{actor.log} Promocode '{code}' requires an active subscription")
-                raise PromocodeNotAvailableError("Active subscription required for this promocode")
-            if self._is_resource_unlimited(promo.reward_type, current):
-                logger.info(f"{actor.log} Promocode '{code}' resource already unlimited")
-                raise PromocodeNotAvailableError("Resource is already unlimited")
+            await self._check_subscription_requirements(actor, user, promo)
 
         await self._check_availability(actor, user, promo)
 
         logger.info(f"{actor.log} Promocode '{code}' is valid for user")
         return promo
+
+    async def _check_subscription_requirements(
+        self, actor: UserDto, user: UserDto, promo: PromocodeDto
+    ) -> None:
+        current = await self.subscription_dao.get_current(user.id)
+        if current is None or not current.is_active:
+            # An expired/disabled subscription has expire_at in the past; extending it
+            # would push a past date to the panel, which rejects it. Require an active sub.
+            logger.info(f"{actor.log} Promocode '{promo.code}' requires an active subscription")
+            raise PromocodeNotAvailableError("Active subscription required for this promocode")
+        if promo.reward_type == PromocodeRewardType.DURATION and current.is_trial:
+            # A DURATION promo would extend the free trial's expiry, effectively
+            # prolonging the trial. Block it — trials are not eligible.
+            logger.info(f"{actor.log} Promocode '{promo.code}' cannot extend a trial subscription")
+            raise PromocodeNotAvailableError("Duration promocode not allowed on trial")
+        if self._is_resource_unlimited(promo.reward_type, current):
+            logger.info(f"{actor.log} Promocode '{promo.code}' resource already unlimited")
+            raise PromocodeNotAvailableError("Resource is already unlimited")
 
     @staticmethod
     def _is_resource_unlimited(

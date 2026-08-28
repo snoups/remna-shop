@@ -5,7 +5,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
-from src.core.enums import BannerName, SubscriptionStatus
+from src.core.enums import BannerName, SubscriptionStatus, TransactionStatus
 from src.telegram.keyboards import back_main_menu_button
 from src.telegram.routers.dashboard.broadcast.handlers import on_content_input, on_preview
 from src.telegram.states import DashboardRemnashop, DashboardUser
@@ -61,6 +61,7 @@ from .handlers import (
     on_give_access,
     on_give_subscription,
     on_go_to_user,
+    on_grant_failed_subscription,
     on_internal_squad_select,
     on_personal_discount_input,
     on_personal_discount_select,
@@ -665,6 +666,14 @@ transaction = Window(
             id="go_to_user",
             on_click=on_go_to_user,
             when=F["is_from_all_transactions"],
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-user.transaction-grant"),
+            id="grant_failed",
+            on_click=on_grant_failed_subscription,
+            when=F["transaction_status"] == TransactionStatus.FAILED,
         ),
     ),
     Row(

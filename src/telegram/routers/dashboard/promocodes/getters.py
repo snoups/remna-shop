@@ -5,7 +5,7 @@ from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 
-from src.application.common import TranslatorRunner
+from src.application.common import BotService, TranslatorRunner
 from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import PromocodeDto
 from src.application.use_cases.promocode.queries.get import (
@@ -54,6 +54,7 @@ async def getter_configurator(
     dialog_manager: DialogManager,
     retort: FromDishka[Retort],
     i18n: FromDishka[TranslatorRunner],
+    bot_service: FromDishka[BotService],
     **kwargs: Any,
 ) -> dict[str, Any]:
     raw = dialog_manager.dialog_data.get(PromocodeDto.__name__)
@@ -74,8 +75,10 @@ async def getter_configurator(
     user = dialog_manager.middleware_data[USER_KEY]
     can_manage = PermissionPolicy.has_permission(user, Permission.MANAGE_PROMOCODE)
     is_subscription = promo.reward_type == PromocodeRewardType.SUBSCRIPTION
+    promo_url = await bot_service.get_promocode_url(promo.code) if promo.code else ""
     return {
         "is_edit": dialog_manager.dialog_data.get("is_edit", False),
+        "promo_url": promo_url,
         "is_active": int(promo.is_active),
         "is_reusable": int(promo.is_reusable),
         "code": promo.code or "—",

@@ -15,6 +15,7 @@ from .system import (
     RemnawaveVersionWarningEvent,
     TorrentBlockerReportEvent,
     TrialActivatedEvent,
+    UserAllDevicesDeletedEvent,
     UserDeviceAddedEvent,
     UserDeviceDeletedEvent,
     UserFirstConnectionEvent,
@@ -23,6 +24,7 @@ from .system import (
     WebhookErrorEvent,
 )
 from .user import (
+    GraceActivatedEvent,
     ReferralAttachedEvent,
     ReferralRewardFailedEvent,
     ReferralRewardReceivedEvent,
@@ -54,6 +56,7 @@ __all__ = [
     "NodeTrafficReachedEvent",
     "TorrentBlockerReportEvent",
     #
+    "UserAllDevicesDeletedEvent",
     "UserDeviceAddedEvent",
     "UserDeviceDeletedEvent",
     "UserFirstConnectionEvent",
@@ -71,4 +74,5 @@ __all__ = [
     "SubscriptionExpiresEvent",
     "SubscriptionLimitedEvent",
     "TorrentBlockedEvent",
+    "GraceActivatedEvent",
 ]

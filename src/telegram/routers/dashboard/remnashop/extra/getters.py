@@ -16,6 +16,7 @@ async def extra_getter(
     settings = await settings_dao.get()
     extra = settings.extra
     return {
+        "grace_enabled": settings.grace.enabled,
         "device_single_enabled": extra.device_single_reset.enabled,
         "device_single_cooldown": extra.device_single_reset.cooldown_hours,
         "device_all_enabled": extra.device_all_reset.enabled,
@@ -26,4 +27,5 @@ async def extra_getter(
         "referral_reset_cooldown": extra.referral_reset.cooldown_hours,
         "trial_channel_guard_enabled": extra.trial_channel_guard,
         "mini_app_reserve_enabled": extra.mini_app_reserve,
+        "stars_paid_requirement_enabled": extra.stars_require_paid_purchase,
     }

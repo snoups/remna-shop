@@ -4,12 +4,12 @@ from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 
-from src.core.constants import EMAIL_VERIFICATION_CODE_LENGTH
+from src.core.constants import EMAIL_CODE_LENGTH
 
 
 def generate_email_verification_code() -> str:
-    lower = 10 ** (EMAIL_VERIFICATION_CODE_LENGTH - 1)
-    upper = (10**EMAIL_VERIFICATION_CODE_LENGTH) - 1
+    lower = 10 ** (EMAIL_CODE_LENGTH - 1)
+    upper = (10**EMAIL_CODE_LENGTH) - 1
     return str(secrets.randbelow(upper - lower + 1) + lower)
 
 

@@ -1,6 +1,9 @@
+from datetime import datetime
 from typing import List, Optional, Protocol, TypeVar, Union
+from uuid import UUID
 
 from packaging.version import Version
+from remnapy.enums import TrafficLimitStrategy
 from remnapy.models import UserResponseDto
 from remnapy.models.hwid import HwidDeviceDto
 
@@ -32,6 +35,18 @@ class Remnawave(Protocol):
         plan: Optional[PlanSnapshotDto] = None,
         subscription: Optional[SubscriptionDto] = None,
         reset_traffic: bool = False,
+    ) -> UserResponseDto: ...
+
+    async def apply_grace(
+        self,
+        user_id: int,
+        expire_at: datetime,
+        internal_squads: list[UUID],
+        external_squad: Optional[UUID],
+        traffic_bytes: int,
+        traffic_strategy: TrafficLimitStrategy,
+        tag: Optional[str],
+        device_limit: int,
     ) -> UserResponseDto: ...
 
     async def enable_user(self, user_id: int) -> None: ...

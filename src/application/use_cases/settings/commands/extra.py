@@ -75,6 +75,29 @@ class ToggleMiniAppReserve(Interactor[None, Optional[SettingsDto]]):
         return updated
 
 
+class ToggleStarsPaidRequirement(Interactor[None, Optional[SettingsDto]]):
+    required_permission = Permission.SETTINGS_EXTRA
+
+    def __init__(self, uow: UnitOfWork, settings_dao: SettingsDao) -> None:
+        self.uow = uow
+        self.settings_dao = settings_dao
+
+    async def _execute(self, actor: UserDto, data: None) -> Optional[SettingsDto]:
+        async with self.uow:
+            settings = await self.settings_dao.get()
+            settings.extra.stars_require_paid_purchase = (
+                not settings.extra.stars_require_paid_purchase
+            )
+            updated = await self.settings_dao.update(settings)
+            await self.uow.commit()
+
+        logger.info(
+            f"{actor.log} Toggled stars_require_paid_purchase: "
+            f"{settings.extra.stars_require_paid_purchase}"
+        )
+        return updated
+
+
 @dataclass(frozen=True)
 class UpdateResetCooldownDto:
     feature: str

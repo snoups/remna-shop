@@ -165,6 +165,7 @@ btn-user =
     .subscription-url = 📋 Скопировать ссылку
     .subscription-delete = ❌ Удалить
     .subscription-reissue = ♻️ Перевыпустить
+    .transaction-grant = ✅ Выдать подписку
     .message-preview = 👀 Предпросмотр
     .message-confirm = ✅ Отправить
     .referral-reset = 🔄 Сбросить реф. ссылку
@@ -262,6 +263,7 @@ btn-promocodes =
     .expires = ⌛ Срок действия
     .max-activations = 🔢 Лимит активаций
     .reset = 🔄 Сбросить
+    .copy-deeplink = 🔗 Скопировать диплинк
 
     .plan-duration = { $days -> 
         [one] { $days } день
@@ -324,7 +326,12 @@ btn-remnashop-transaction = { $status ->
     } #{ $user_id } · { gateway-type } · { $created_at }
 
 btn-remnashop-extra =
-    .device-single = { $enabled -> 
+    .grace = { $enabled ->
+        [1] 🟢
+        *[0] 🔴
+    } Grace-режим
+
+    .device-single = { $enabled ->
         [1] 🟢
         *[0] 🔴
     } Удаление устройства
@@ -353,10 +360,27 @@ btn-remnashop-extra =
         *[0] 🔴
     } Резервная кнопка подключения
 
+    .stars-paid-requirement = { $enabled ->
+        [1] 🟢
+        *[0] 🔴
+    } Stars: только после оплаты
+
     .toggle = { $enabled ->
         [1] 🟢 Включено
         *[0] 🔴 Выключено
     }
+
+btn-remnashop-grace =
+    .toggle = { $enabled ->
+        [1] 🟢 Включено
+        *[0] 🔴 Выключено
+    }
+    .traffic = 🌐 Лимит трафика
+    .strategy = 🔄 Стратегия сброса
+    .duration = ⏳ Длительность
+    .tag = 📌 Тег
+    .internal-squads = ⏺️ Внутренние сквады
+    .external-squad = ⏹️ Внешний сквад
 
 btn-menu-editor =
     .text = 🏷️ Текст

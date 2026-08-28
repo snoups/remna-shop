@@ -352,6 +352,7 @@ gateway-type = { $gateway_type ->
     [PAYMASTER] PayMaster
     [PLATEGA] Platega
     [ROBOKASSA] RoboKassa
+    [ROLLYPAY] RollyPay
     [URLPAY] UrlPay
     [WATA] WATA
     [VALUTIX] Valutix
@@ -446,11 +447,8 @@ button-type = { $button_type ->
 
 notification-type = { $notification_type ->
     [SYSTEM] Система
-    [EXPIRES_IN_3_DAYS] Подписка истекает (3 дня)
-    [EXPIRES_IN_2_DAYS] Подписка истекает (2 дня)
-    [EXPIRES_IN_1_DAY] Подписка истекает (1 день)
+    [EXPIRES] Подписка истекает
     [EXPIRED] Подписка истекла
-    [EXPIRED_1_DAY_AGO] Подписка истекла (1 день)
     [LIMITED] Трафик исчерпан
     [REFERRAL_ATTACHED] Реферал закреплен
     [REFERRAL_REWARD_RECEIVED] Вознаграждение за реферала
@@ -469,6 +467,7 @@ notification-type = { $notification_type ->
     [USER_REVOKED_SUBSCRIPTION] Сброс подписки
     [NOT_CONNECTED] Нет подключения
     [TORRENT_BLOCKED] Ограничение Torrent
+    [GRACE_ACTIVATED] Временный доступ активирован
     [BLACKLIST_ATTEMPT] Регистрация пользователя (из ЧС)
     *[OTHER] { $notification_type }
     }

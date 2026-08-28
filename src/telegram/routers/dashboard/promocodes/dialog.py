@@ -9,7 +9,7 @@ from src.core.enums import BannerName
 from src.telegram.keyboards import main_menu_button
 from src.telegram.states import Dashboard, DashboardPromocodes
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
-from src.telegram.widgets.kbd import Button, ListGroup, Row, Start, SwitchTo
+from src.telegram.widgets.kbd import Button, CopyText, ListGroup, Row, Start, SwitchTo
 
 from .getters import (
     getter_availability_select,
@@ -184,6 +184,13 @@ configurator = Window(
             on_click=on_delete_promo,
             style=Style(ButtonStyle.DANGER),
             when=F["is_edit"] & F["can_manage"],
+        ),
+    ),
+    Row(
+        CopyText(
+            text=I18nFormat("btn-promocodes.copy-deeplink"),
+            copy_text=Format("{promo_url}"),
+            when=F["promo_url"],
         ),
     ),
     Row(

@@ -2,6 +2,7 @@ from typing import Final
 
 from src.application.common import Interactor
 
+from .commands.grace import EnterGraceMode
 from .commands.management import (
     AddSubscriptionDuration,
     DeleteSubscription,
@@ -39,4 +40,5 @@ SUBSCRIPTION_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     SetUserSubscription,
     ActivateTrialSubscription,
     PurchaseSubscription,
+    EnterGraceMode,
 )
