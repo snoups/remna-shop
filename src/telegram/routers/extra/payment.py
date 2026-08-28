@@ -36,12 +36,16 @@ async def on_successful_payment(
 
     new_status = TransactionStatus.COMPLETED
     if user.is_owner:
-        logger.info(f"{user.log} Refunding test payment '{payment.telegram_payment_charge_id}'")
+        # Refund the owner's test charge, but process the transaction as completed.
+        # Using CANCELED here prevents ProcessPayment from applying the purchased plan.
+        logger.info(
+            f"{user.log} Refunding owner test payment "
+            f"'{payment.telegram_payment_charge_id}' while completing the transaction"
+        )
         await bot.refund_star_payment(
             user_id=user.telegram_id,
             telegram_payment_charge_id=payment.telegram_payment_charge_id,
         )
-        new_status = TransactionStatus.CANCELED
     await process_payment.system(
         ProcessPaymentDto(
             payment_id=UUID(payment.invoice_payload),
