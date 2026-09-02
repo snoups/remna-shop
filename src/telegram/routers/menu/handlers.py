@@ -29,10 +29,12 @@ from src.application.use_cases.subscription.commands.purchase import (
 )
 from src.application.use_cases.user.commands.profile_edit import ResetOwnReferralCode
 from src.application.use_cases.user.queries.plans import GetAvailableTrial
+from src.core.config import AppConfig
 from src.core.constants import USER_KEY
 from src.core.enums import MediaType
 from src.core.exceptions import CooldownError, TrialNotAvailableError
 from src.core.utils.i18n_helpers import i18n_format_expire_time
+from src.core.utils.referral_urls import build_web_referral_url
 from src.core.utils.time import get_traffic_reset_delta
 from src.telegram.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
 from src.telegram.states import MainMenu, Subscription
@@ -262,8 +264,30 @@ async def show_reason(
     )
 
 
+async def _send_referral_qr(
+    *,
+    user: TelegramUserDto,
+    referral_url: str,
+    caption_key: str,
+    generate_referral_qr: GenerateReferralQr,
+    notifier: Notifier,
+) -> None:
+    referral_qr = await generate_referral_qr.system(referral_url)
+
+    await notifier.notify_user(
+        user=user,
+        payload=MessagePayloadDto(
+            i18n_key=caption_key,
+            media=MediaDescriptorDto(kind="bytes", value=referral_qr, filename="qr.png"),
+            media_type=MediaType.PHOTO,
+            disable_default_markup=False,
+            delete_after=None,
+        ),
+    )
+
+
 @inject
-async def on_show_qr(
+async def on_show_telegram_qr(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
@@ -272,19 +296,47 @@ async def on_show_qr(
     notifier: FromDishka[Notifier],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
-
     referral_url = await bot_service.get_referral_url(user.referral_code)
-    referral_qr = await generate_referral_qr.system(referral_url)
-
-    await notifier.notify_user(
+    await callback.answer()
+    await _send_referral_qr(
         user=user,
-        payload=MessagePayloadDto(
-            i18n_key="",
-            media=MediaDescriptorDto(kind="bytes", value=referral_qr, filename="qr.png"),
-            media_type=MediaType.PHOTO,
-            disable_default_markup=False,
-            delete_after=None,
-        ),
+        referral_url=referral_url,
+        caption_key="msg-invite-qr.telegram",
+        generate_referral_qr=generate_referral_qr,
+        notifier=notifier,
+    )
+
+
+@inject
+async def on_show_web_qr(
+    callback: CallbackQuery,
+    widget: Button,
+    dialog_manager: DialogManager,
+    config: FromDishka[AppConfig],
+    i18n: FromDishka[TranslatorRunner],
+    generate_referral_qr: FromDishka[GenerateReferralQr],
+    notifier: FromDishka[Notifier],
+) -> None:
+    user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
+    referral_url = build_web_referral_url(
+        config.web_cabinet_url if config.web_enabled else "",
+        user.referral_code,
+    )
+    if not referral_url:
+        await callback.answer(
+            text=i18n.get("ntf-invite.web-link-unavailable"),
+            show_alert=True,
+        )
+        await dialog_manager.switch_to(MainMenu.INVITE)
+        return
+
+    await callback.answer()
+    await _send_referral_qr(
+        user=user,
+        referral_url=referral_url,
+        caption_key="msg-invite-qr.clean-pay",
+        generate_referral_qr=generate_referral_qr,
+        notifier=notifier,
     )
 
 

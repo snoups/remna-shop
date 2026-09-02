@@ -130,7 +130,8 @@ class MulenPayGateway(BasePaymentGateway):
 
     def _generate_signature(self, currency: str, amount: str, shop_id: int) -> str:
         raw = f"{currency}{amount}{shop_id}{self.data.settings.secret_key.get_secret_value()}"  # type: ignore[union-attr]
-        return hashlib.sha1(raw.encode()).hexdigest()
+        # The gateway protocol mandates SHA-1 for this interoperability signature.
+        return hashlib.sha1(raw.encode(), usedforsecurity=False).hexdigest()
 
     def _get_payment_data(self, data: dict[str, Any], order_uuid: str) -> PaymentResultDto:
         payment_url = data.get("paymentUrl")

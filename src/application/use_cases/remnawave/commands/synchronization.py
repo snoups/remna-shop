@@ -2,7 +2,12 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from src.application.common import Cryptographer, Interactor, Remnawave
+from src.application.common import (
+    Cryptographer,
+    Interactor,
+    Remnawave,
+    SubscriptionMutationLock,
+)
 from src.application.common.dao import SubscriptionDao, UserDao
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
@@ -32,6 +37,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         config: AppConfig,
         remnawave: Remnawave,
         cryptographer: Cryptographer,
+        subscription_mutation_lock: SubscriptionMutationLock,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
@@ -39,6 +45,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         self.config = config
         self.remnawave = remnawave
         self.cryptographer = cryptographer
+        self.subscription_mutation_lock = subscription_mutation_lock
 
     async def _execute(self, actor: UserDto, data: SyncRemnaUserDto) -> bool:
         remna_user = data.remna_user
@@ -71,18 +78,39 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
                 )
                 return False
 
-            subscription = await self.subscription_dao.get_current(user.id)
-            remna_subscription = RemnaSubscriptionDto.from_remna_user(remna_user)
+            async with self.subscription_mutation_lock.hold(user.id):
+                # Webhooks and bulk listings can arrive out of order. Re-read the
+                # current panel record while holding the same fence as local writers
+                # so an old MODIFIED payload cannot roll expire_at backwards.
+                latest_remna_user = await self.remnawave.get_user_by_uuid(remna_user.uuid)
+                if latest_remna_user is None:
+                    logger.warning(
+                        f"Remnawave user '{remna_user.uuid}' disappeared before sync; "
+                        "stale payload ignored"
+                    )
+                    return False
+                if latest_remna_user.updated_at != remna_user.updated_at:
+                    logger.info(
+                        f"Replacing delivered Remnawave snapshot for '{remna_user.uuid}' "
+                        f"('{remna_user.updated_at}' != '{latest_remna_user.updated_at}')"
+                    )
+                # The fenced read is always authoritative. Remnawave timestamps may
+                # have coarse precision, so equality does not prove that the
+                # webhook/list payload contains the current expiry.
+                remna_user = latest_remna_user
 
-            if not subscription:
-                logger.info(
-                    f"No subscription found for user '{user.remna_name}', importing from panel"
-                )
-                await self._import_subscription(user.id, remna_subscription)
-                await self.uow.commit()
-                logger.info(f"Sync completed for user '{remna_user.telegram_id}'")
-                return False
-            else:
+                subscription = await self.subscription_dao.get_current(user.id)
+                remna_subscription = RemnaSubscriptionDto.from_remna_user(remna_user)
+
+                if not subscription:
+                    logger.info(
+                        f"No subscription found for user '{user.remna_name}', importing from panel"
+                    )
+                    await self._import_subscription(user.id, remna_subscription)
+                    await self.uow.commit()
+                    logger.info(f"Sync completed for user '{remna_user.telegram_id}'")
+                    return False
+
                 logger.info(f"Synchronizing existing subscription for user {user.log}")
                 changed = await self._update_subscription(subscription, remna_subscription)
                 await self.uow.commit()
@@ -160,12 +188,14 @@ class SyncAllUsersFromBot(Interactor[None, dict[str, int]]):
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
         sync_remna_user: SyncRemnaUser,
+        subscription_mutation_lock: SubscriptionMutationLock,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
         self.sync_remna_user = sync_remna_user
+        self.subscription_mutation_lock = subscription_mutation_lock
 
     async def _execute(self, actor: UserDto, data: None) -> dict[str, int]:
         bot_users = await self._fetch_all_bot_users()
@@ -179,41 +209,20 @@ class SyncAllUsersFromBot(Interactor[None, dict[str, int]]):
 
         for user in bot_users:
             try:
-                subscription = await self.subscription_dao.get_current(user.id)
-
-                if not subscription:
+                async with self.subscription_mutation_lock.hold(user.id):
+                    sync_result = await self._sync_user_locked(user)
+                if sync_result == "skipped":
                     skipped += 1
-                    continue
-
-                remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
-
-                if remna_user:
-                    updated_user = await self.remnawave.update_user(
-                        user=user,
-                        uuid=subscription.user_remna_id,
-                        subscription=subscription,
-                    )
-                    if updated_user.subscription_url != subscription.url:
-                        subscription.url = updated_user.subscription_url
-                        async with self.uow:
-                            await self.subscription_dao.update(subscription)
-                            await self.uow.commit()
+                elif sync_result == "updated":
                     updated += 1
                 else:
-                    created_user = await self.remnawave.create_user(
-                        user=user,
-                        subscription=subscription,
-                    )
-                    await self.sync_remna_user.system(
-                        SyncRemnaUserDto(created_user, creating=False)
-                    )
                     recreated += 1
 
             except Exception as exception:
                 logger.exception(f"Error reverse-syncing bot user {user.log}: {exception}")
                 errors += 1
 
-        result = {
+        summary = {
             "total_bot_users": len(bot_users),
             "updated": updated,
             "recreated": recreated,
@@ -221,8 +230,38 @@ class SyncAllUsersFromBot(Interactor[None, dict[str, int]]):
             "errors": errors,
         }
 
-        logger.info(f"Reverse sync (bot → panel) summary: '{result}'")
-        return result
+        logger.info(f"Reverse sync (bot → panel) summary: '{summary}'")
+        return summary
+
+    async def _sync_user_locked(self, user: UserDto) -> str:
+        # Refetch only after acquiring the same per-user fence used by referral
+        # EXTRA_DAYS rewards, otherwise a stale full snapshot can erase expire_at.
+        subscription = await self.subscription_dao.get_current(user.id)
+
+        if not subscription:
+            return "skipped"
+
+        remna_user = await self.remnawave.get_user_by_uuid(subscription.user_remna_id)
+
+        if remna_user:
+            updated_user = await self.remnawave.update_user(
+                user=user,
+                uuid=subscription.user_remna_id,
+                subscription=subscription,
+            )
+            if updated_user.subscription_url != subscription.url:
+                subscription.url = updated_user.subscription_url
+                async with self.uow:
+                    await self.subscription_dao.update(subscription)
+                    await self.uow.commit()
+            return "updated"
+
+        created_user = await self.remnawave.create_user(
+            user=user,
+            subscription=subscription,
+        )
+        await self.sync_remna_user.system(SyncRemnaUserDto(created_user, creating=False))
+        return "recreated"
 
     async def _fetch_all_bot_users(self) -> list[UserDto]:
         all_users: list[UserDto] = []

@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import uuid
 from decimal import Decimal
 from typing import Any, Final, Union
@@ -63,9 +64,58 @@ class YookassaGateway(BasePaymentGateway):
         )
 
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResultDto:
-        payload = await self._create_payment_payload(str(amount), details)
-        headers = {"Idempotence-Key": str(uuid.uuid4())}
-        logger.debug(f"Creating payment payload: {payload}")
+        return await self.create_payment(amount, details)
+
+    async def create_payment(
+        self,
+        amount: Decimal,
+        details: str,
+        idempotency_key: str | None = None,
+    ) -> PaymentResultDto:
+        payload = await self.build_payment_request(amount, details)
+        return await self.create_payment_from_request(
+            payload,
+            idempotency_key=idempotency_key or str(uuid.uuid4()),
+        )
+
+    async def build_payment_request(
+        self,
+        amount: Decimal,
+        details: str,
+        *,
+        return_url: str | None = None,
+    ) -> dict[str, Any]:
+        return await self._create_payment_payload(str(amount), details, return_url=return_url)
+
+    def payment_owner_fingerprint(self) -> str:
+        shop_id = self.data.settings.shop_id  # type: ignore[union-attr]
+        return hashlib.sha256(f"remnashop:yookassa-owner:v1\0{shop_id}".encode()).hexdigest()
+
+    async def create_payment_from_request(
+        self,
+        request_snapshot: dict[str, Any],
+        *,
+        idempotency_key: str | None,
+    ) -> PaymentResultDto:
+        if not idempotency_key:
+            raise ValueError("YooKassa replay requires an idempotency key")
+        # Copy through orjson to reject non-JSON values and prevent callers mutating the
+        # persisted object while the request is in flight.
+        payload = orjson.loads(orjson.dumps(request_snapshot))
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid persisted YooKassa request")
+        headers = {"Idempotence-Key": idempotency_key}
+        logger.debug(
+            "Creating YooKassa payment with persisted payload (amount={}, currency={}, "
+            "has_metadata={})",
+            payload.get("amount", {}).get("value")
+            if isinstance(payload.get("amount"), dict)
+            else None,
+            payload.get("amount", {}).get("currency")
+            if isinstance(payload.get("amount"), dict)
+            else None,
+            "metadata" in payload,
+        )
 
         last_connect_error: ConnectError | None = None
 
@@ -87,8 +137,8 @@ class YookassaGateway(BasePaymentGateway):
 
             except HTTPStatusError as e:
                 logger.error(
-                    f"HTTP error creating payment. "
-                    f"Status: '{e.response.status_code}', Body: {e.response.text}"
+                    "YooKassa payment creation failed with HTTP status '{}'",
+                    e.response.status_code,
                 )
                 raise
             except (KeyError, orjson.JSONDecodeError) as e:
@@ -103,6 +153,49 @@ class YookassaGateway(BasePaymentGateway):
             f"Last error: {last_connect_error}"
         )
         raise last_connect_error  # type: ignore[misc]
+
+    async def verify_payment_result(
+        self,
+        payment_id: UUID,
+        request_snapshot: dict[str, Any],
+    ) -> PaymentResultDto:
+        response = await self._client.get(f"v3/payments/{payment_id}")
+        response.raise_for_status()
+        data = orjson.loads(response.content)
+        if not isinstance(data, dict) or str(data.get("id")) != str(payment_id):
+            raise ValueError("YooKassa returned a mismatched payment")
+
+        expected_amount = request_snapshot.get("amount")
+        actual_amount = data.get("amount")
+        if not isinstance(expected_amount, dict) or not isinstance(actual_amount, dict):
+            raise ValueError("YooKassa payment amount is unavailable")
+        try:
+            amount_matches = Decimal(str(expected_amount.get("value"))) == Decimal(
+                str(actual_amount.get("value"))
+            )
+        except Exception as exc:
+            raise ValueError("YooKassa payment amount is invalid") from exc
+        if not amount_matches or expected_amount.get("currency") != actual_amount.get("currency"):
+            raise ValueError("YooKassa payment amount or currency mismatch")
+
+        expected_metadata = request_snapshot.get("metadata")
+        if expected_metadata is not None and data.get("metadata") != expected_metadata:
+            raise ValueError("YooKassa payment metadata mismatch")
+        provider_status = data.get("status")
+        if provider_status not in {"pending", "waiting_for_capture", "succeeded", "canceled"}:
+            raise ValueError("YooKassa payment has an unsupported status")
+
+        confirmation = data.get("confirmation")
+        payment_url: str | None = None
+        if isinstance(confirmation, dict):
+            raw_url = confirmation.get("confirmation_url")
+            if raw_url is not None:
+                payment_url = str(raw_url)
+        return PaymentResultDto(
+            id=payment_id,
+            url=payment_url,
+            provider_status=str(provider_status),
+        )
 
     async def handle_webhook(self, request: Request) -> Union[tuple[UUID, TransactionStatus], None]:
         logger.debug("Received YooKassa webhook request")
@@ -130,10 +223,19 @@ class YookassaGateway(BasePaymentGateway):
 
         return payment_id, transaction_status
 
-    async def _create_payment_payload(self, amount: str, details: str) -> dict[str, Any]:
+    async def _create_payment_payload(
+        self,
+        amount: str,
+        details: str,
+        *,
+        return_url: str | None = None,
+    ) -> dict[str, Any]:
         return {
             "amount": {"value": amount, "currency": self.data.currency},
-            "confirmation": {"type": "redirect", "return_url": await self._get_bot_redirect_url()},
+            "confirmation": {
+                "type": "redirect",
+                "return_url": return_url or await self._get_bot_redirect_url(),
+            },
             "capture": True,
             "description": details,
             "receipt": {
@@ -157,13 +259,21 @@ class YookassaGateway(BasePaymentGateway):
         if not payment_id_str:
             raise KeyError("Invalid response from YooKassa API: missing 'id'")
 
+        provider_status = data.get("status")
+        if provider_status not in {"pending", "waiting_for_capture", "succeeded", "canceled"}:
+            raise KeyError("Invalid response from YooKassa API: unsupported status")
+
         confirmation: dict = data.get("confirmation", {})
         payment_url = confirmation.get("confirmation_url")
 
-        if not payment_url:
+        if provider_status in {"pending", "waiting_for_capture"} and not payment_url:
             raise KeyError("Invalid response from YooKassa API: missing 'confirmation_url'")
 
-        return PaymentResultDto(id=UUID(payment_id_str), url=str(payment_url))
+        return PaymentResultDto(
+            id=UUID(payment_id_str),
+            url=str(payment_url) if payment_url else None,
+            provider_status=str(provider_status),
+        )
 
     def _verify_webhook(self, request: Request) -> bool:
         ip = self._get_ip(request.headers)

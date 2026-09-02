@@ -53,6 +53,8 @@ class UserDto(BaseDto, TrackableMixin, TimestampMixin):
     password_reset_expires_at: Optional[datetime] = None
     password_reset_attempts: int = 0
     token_version: int = 0
+    subscription_expiration_email_enabled: bool = False
+    subscription_expiration_email_enabled_at: Optional[datetime] = None
 
     username: Optional[str] = None
     referral_code: str = ""

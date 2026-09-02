@@ -1,0 +1,26 @@
+{
+  "checked_at": "2026-08-22T08:18:06+00:00",
+  "gateway": "YOOKASSA",
+  "http_status": 200,
+  "incident": "REMNASHOP-LEGACY-REFERRAL-REMEDIATION-2026-08-22",
+  "is_test": false,
+  "local_fulfillment_status": "MANUAL_REQUIRED",
+  "local_transaction_status": "FAILED",
+  "paid": true,
+  "payment_id_sha256": "1957bef8ddf42286a8fe7ee0a61f4fd85cf6ff57ecde29581077130923edf172",
+  "plan_is_trial": false,
+  "provider_amount": {
+    "currency": "RUB",
+    "value": "287.00"
+  },
+  "provider_refunded_amount": {
+    "currency": "RUB",
+    "value": "0.00"
+  },
+  "provider_status": "succeeded",
+  "purchase_type": "CHANGE",
+  "refundable": true,
+  "reward_id": 65,
+  "schema_version": 1,
+  "source_transaction_id": 1761
+}

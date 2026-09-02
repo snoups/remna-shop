@@ -49,7 +49,9 @@ class NotificationQueue:
                 )
 
     async def _worker(self) -> None:
-        assert self._sender is not None
+        sender = self._sender
+        if sender is None:
+            raise RuntimeError("Notification worker started without a sender")
         while True:
             await asyncio.sleep(self._interval)
 
@@ -68,7 +70,7 @@ class NotificationQueue:
                 results = []
                 for task in chunk:
                     try:
-                        result = await self._sender(task)
+                        result = await sender(task)
                         results.append(result)
                     except Exception as e:
                         results.append(e)

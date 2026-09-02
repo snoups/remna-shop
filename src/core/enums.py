@@ -113,6 +113,13 @@ class TransactionStatus(UpperStrEnum):
     FAILED = auto()
 
 
+class TransactionFulfillmentStatus(UpperStrEnum):
+    NOT_STARTED = auto()
+    PROCESSING = auto()
+    SUCCEEDED = auto()
+    MANUAL_REQUIRED = auto()
+
+
 class SubscriptionStatus(UpperStrEnum):
     ACTIVE = auto()
     DISABLED = auto()
@@ -124,6 +131,26 @@ class SubscriptionStatus(UpperStrEnum):
 class ReferralRewardType(UpperStrEnum):
     POINTS = auto()
     EXTRA_DAYS = auto()
+
+
+class ReferralRewardState(UpperStrEnum):
+    PENDING = auto()
+    PROCESSING = auto()
+    RETRY_WAITING = auto()
+    ISSUED = auto()
+    MANUAL_REQUIRED = auto()
+    SUPERSEDED = auto()
+
+
+class LegacyReferralRewardRecoveryAction(UpperStrEnum):
+    RETRY_PROVEN_MISSING = auto()
+    CONFIRM_ADMIN_COMPENSATED = auto()
+    RETRY_OPERATOR_DIRECTED = auto()
+
+
+class LegacyReferralRewardSourceValidation(UpperStrEnum):
+    LOCAL_COMPLETED = auto()
+    PROVIDER_SUCCEEDED = auto()
 
 
 class PromocodeRewardType(UpperStrEnum):

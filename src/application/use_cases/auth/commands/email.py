@@ -45,6 +45,10 @@ class ChangeEmail(Interactor[ChangeEmailDto, UserDto]):
 
         actor.pending_email = data.email
         actor.is_email_verified = False
+        # Consent is tied to a verified delivery address. Re-verification is an
+        # explicit boundary; reminders must be enabled again afterwards.
+        actor.subscription_expiration_email_enabled = False
+        actor.subscription_expiration_email_enabled_at = None
         actor.email_verification_code_hash = None
         actor.email_verification_expires_at = None
 
@@ -112,6 +116,8 @@ class RequestEmailVerification(Interactor[RequestEmailVerificationDto, EmailVeri
                 )
             actor.pending_email = requested_email
             actor.is_email_verified = False
+            actor.subscription_expiration_email_enabled = False
+            actor.subscription_expiration_email_enabled_at = None
         elif requested_email and requested_email == actor.email and actor.is_email_verified:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="Email is already verified"

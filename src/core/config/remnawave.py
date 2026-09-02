@@ -1,6 +1,5 @@
 from httpx import Cookies
-from pydantic import SecretStr, field_validator
-from pydantic_core.core_schema import FieldValidationInfo
+from pydantic import SecretStr, ValidationInfo, field_validator
 
 from src.core.utils.validators import is_valid_domain
 
@@ -51,7 +50,7 @@ class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
 
     @field_validator("token")
     @classmethod
-    def validate_remnawave_token(cls, field: SecretStr, info: FieldValidationInfo) -> SecretStr:
+    def validate_remnawave_token(cls, field: SecretStr, info: ValidationInfo) -> SecretStr:
         validate_not_change_me(field, info)
         return field
 
@@ -60,7 +59,7 @@ class RemnawaveConfig(BaseConfig, env_prefix="REMNAWAVE_"):
     def validate_remnawave_webhook_secret(
         cls,
         field: SecretStr,
-        info: FieldValidationInfo,
+        info: ValidationInfo,
     ) -> SecretStr:
         validate_not_change_me(field, info)
         return field

@@ -10,6 +10,10 @@ from .notifier import Notifier
 from .password_hasher import PasswordHasher
 from .redirect import Redirect
 from .remnawave import Remnawave
+from .subscription_mutation_lock import (
+    SubscriptionMutationLock,
+    SubscriptionMutationLockLostError,
+)
 from .translator import TranslatorHub, TranslatorRunner
 from .xui_reader import XuiDbReader
 
@@ -28,6 +32,8 @@ __all__ = [
     "PaymentNotificationDispatcher",
     "Redirect",
     "Remnawave",
+    "SubscriptionMutationLock",
+    "SubscriptionMutationLockLostError",
     "TranslatorHub",
     "TranslatorRunner",
     "XuiDbReader",

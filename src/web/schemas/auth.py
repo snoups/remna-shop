@@ -41,6 +41,38 @@ class LoginRequest(BaseModel):
         return value.lower()
 
 
+class StartGenericEmailAuthRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    email: str = Field(max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.lower()
+
+
+class CompleteGenericEmailAuthRequest(StartGenericEmailAuthRequest):
+    code: str = Field(
+        min_length=EMAIL_CODE_LENGTH,
+        max_length=EMAIL_CODE_LENGTH,
+        pattern=r"^\d{6}$",
+    )
+    password: str = Field(min_length=8, max_length=256)
+
+
+class GenericEmailAuthStartResponse(BaseModel):
+    success: bool
+
+
+class IdentifyEmailResponse(BaseModel):
+    exists: bool
+
+
+class ServiceSessionRequest(StartGenericEmailAuthRequest):
+    user_id: str = Field(min_length=1, max_length=32, pattern=r"^[1-9]\d*$")
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=256)
     new_password: str = Field(min_length=8, max_length=256)
@@ -88,10 +120,22 @@ class MeResponse(BaseModel):
     auth_type: AuthType
     email: Optional[str]
     is_email_verified: bool
+    has_password: bool
     pending_email: Optional[str]
     name: str
     username: Optional[str]
     language: str
+
+
+class NotificationPreferencesResponse(BaseModel):
+    subscription_expiration_email_enabled: bool
+    email_eligible: bool
+    sender_email: Optional[str]
+    days_before: list[int]
+
+
+class UpdateNotificationPreferencesRequest(BaseModel):
+    subscription_expiration_email_enabled: bool = Field(strict=True)
 
 
 class ChangePasswordResponse(BaseModel):
@@ -100,6 +144,11 @@ class ChangePasswordResponse(BaseModel):
 
 class PasswordResetResponse(BaseModel):
     success: bool
+
+
+class PasswordResetConfirmResponse(PasswordResetResponse):
+    expires_at: datetime
+    refresh_expires_at: datetime
 
 
 class ChangeEmailRequest(BaseModel):

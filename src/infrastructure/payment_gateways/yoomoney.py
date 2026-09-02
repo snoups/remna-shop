@@ -98,10 +98,13 @@ class YoomoneyGateway(BasePaymentGateway):
             # must remain part of the signed string — otherwise HMAC won't match.
             parsed = parse_qs(body_str, keep_blank_values=True)
             data = {k: v[0] for k, v in parsed.items()}
-            logger.debug(f"Webhook data: {data}")
+            logger.debug("Webhook payload parsed (fields={fields})", fields=sorted(data))
             return data
         except Exception as e:
-            logger.error(f"Failed to parse webhook payload: {e}")
+            logger.error(
+                "Failed to parse webhook payload (error_type={error_type})",
+                error_type=type(e).__name__,
+            )
             raise ValueError("Invalid webhook payload") from e
 
     async def _create_payment_payload(
@@ -144,6 +147,6 @@ class YoomoneyGateway(BasePaymentGateway):
 
         is_valid: bool = hmac.compare_digest(computed_sign, received_sign)
         if not is_valid:
-            logger.warning(f"Invalid signature. Expected {computed_sign}, received {received_sign}")
+            logger.warning("Invalid YooMoney webhook signature")
 
         return is_valid

@@ -1,4 +1,5 @@
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
@@ -16,7 +17,22 @@ from src.core.utils.i18n_helpers import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.core.utils.referral_urls import build_web_referral_url
 from src.core.utils.time import get_traffic_reset_delta
+
+CLEAN_PAY_TELEGRAM_WEBAPP_PATH = "/auth/telegram/webapp"
+
+
+def get_web_cabinet_url(raw_url: str) -> str:
+    url = raw_url.strip()
+    if not url:
+        return ""
+
+    parsed = urlparse(url)
+    if parsed.path.rstrip("/") == CLEAN_PAY_TELEGRAM_WEBAPP_PATH:
+        return url
+
+    return urlunparse(parsed._replace(path=CLEAN_PAY_TELEGRAM_WEBAPP_PATH, query="", fragment=""))
 
 
 @inject
@@ -34,7 +50,7 @@ async def menu_getter(
         menu_data = await get_menu_data(user)
         settings = await settings_dao.get()
         support_url = bot_service.get_support_url(text=i18n.get("message.help"))
-        web_cabinet_url = config.web_cabinet_url.strip()
+        web_cabinet_url = get_web_cabinet_url(config.web_cabinet_url)
 
         purchase_discount = user.purchase_discount or 0
         personal_discount = user.personal_discount or 0
@@ -212,6 +228,7 @@ async def device_confirm_delete_getter(
 @inject
 async def invite_getter(
     dialog_manager: DialogManager,
+    config: AppConfig,
     user: TelegramUserDto,
     bot_service: FromDishka[BotService],
     i18n: FromDishka[TranslatorRunner],
@@ -223,6 +240,10 @@ async def invite_getter(
     referrals = await referral_dao.get_referrals_count(user.id)
     payments = await referral_dao.get_referrals_with_payment_count(user.id)
     referral_url = await bot_service.get_referral_url(user.referral_code)
+    web_referral_url = build_web_referral_url(
+        config.web_cabinet_url if config.web_enabled else "",
+        user.referral_code,
+    )
     support_url = bot_service.get_support_url(text=i18n.get("message.withdraw-points"))
 
     return {
@@ -233,6 +254,8 @@ async def invite_getter(
         "is_points_reward": settings.referral.reward.is_points,
         "has_points": True if user.points > 0 else False,
         "referral_url": referral_url,
+        "web_referral_url": web_referral_url,
+        "has_web_referral_url": int(bool(web_referral_url)),
         "withdraw": support_url,
         "referral_reset_enabled": int(settings.extra.referral_reset.enabled),
     }

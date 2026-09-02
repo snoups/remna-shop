@@ -37,6 +37,14 @@ class Remnawave(Protocol):
         reset_traffic: bool = False,
     ) -> UserResponseDto: ...
 
+    async def reactivate_referral_expiry(
+        self,
+        *,
+        user_id: int,
+        uuid: UUID,
+        expire_at: datetime,
+    ) -> UserResponseDto: ...
+
     async def apply_grace(
         self,
         uuid: UUID,

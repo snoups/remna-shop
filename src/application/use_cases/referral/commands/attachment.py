@@ -36,40 +36,68 @@ class AttachReferral(Interactor[AttachReferralDto, Optional[UserDto]]):
         # Attach the referrer relationship regardless of whether the referral rewards
         # program is enabled: the relationship is needed for invite-only access display
         # and statistics. Reward accrual is gated separately in AssignReferralRewards.
-        referrer = await self.user_dao.get_by_referral_code(data.referral_code)
-
-        if not referrer:
-            logger.info(f"Referral skipped: referrer not found for code '{data.referral_code}'")
-            return None
-
-        if referrer.id == data.user_id:
-            logger.warning(
-                f"Referral skipped: self-referral by user '{data.user_id}' "
-                f"with code '{data.referral_code}'"
-            )
-            return None
-
-        existing, parent = await self.referral_dao.get_referral_chain(data.user_id)
-        if existing:
-            logger.info(f"Referral skipped: user '{data.user_id}' already referred")
-            return None
-
-        level = self._define_referral_level(parent.level if parent else None)
-
-        logger.info(
-            f"Referral detected '{referrer.remna_name}' -> "
-            f"'{data.user_id}' with level '{level.name}'"
-        )
-
         async with self.uow:
+            # Account merge takes the same graph lock before changing canonical
+            # ownership. Resolve the code only after this lock so an old source
+            # code cannot race into a newly merged, inactive account.
+            await self.referral_dao.lock_referral_graph()
+            referrer = await self.user_dao.get_by_referral_code(data.referral_code)
+
+            if not referrer:
+                logger.info(
+                    f"Referral skipped: referrer not found for code '{data.referral_code}'"
+                )
+                await self.uow.commit()
+                return None
+
+            if referrer.id == data.user_id:
+                logger.warning(
+                    f"Referral skipped: self-referral by user '{data.user_id}' "
+                    f"with code '{data.referral_code}'"
+                )
+                await self.uow.commit()
+                return None
+
+            # Serialize attachment with first-payment intent creation and account
+            # merge. The existing-check must happen only after this shared fence.
+            await self.referral_dao.lock_referral_attribution(
+                data.user_id,
+                (referrer.id,),
+            )
+            existing, _ = await self.referral_dao.get_referral_chain(data.user_id)
+            if existing:
+                logger.info(f"Referral skipped: user '{data.user_id}' already referred")
+                await self.uow.commit()
+                return None
+
+            # Adding referrer -> referred is invalid when the referred user is
+            # already an ancestor of the referrer. The database repeats this
+            # check as the final concurrency-safe invariant.
+            if await self.referral_dao.has_referral_path(data.user_id, referrer.id):
+                logger.warning(
+                    f"Referral skipped: edge '{referrer.id}' -> '{data.user_id}' "
+                    "would create a cycle"
+                )
+                await self.uow.commit()
+                return None
+
             referred = await self.user_dao.get_by_id(data.user_id)
             if not referred:
                 logger.warning(f"Referral skipped: referred user not found '{data.user_id}'")
+                await self.uow.commit()
                 return None
+
+            logger.info(
+                f"Referral detected '{referrer.remna_name}' -> "
+                f"'{data.user_id}'"
+            )
 
             await self.referral_dao.create_referral(
                 ReferralDto(
-                    level=level,
+                    # A stored referral is always the direct attribution edge.
+                    # L2 is relative to the viewer/reward recipient and must be
+                    # derived by traversing the chain, not persisted on this edge.
+                    level=ReferralLevel.FIRST,
                     referrer=referrer,
                     referred=referred,
                 )
@@ -79,15 +107,3 @@ class AttachReferral(Interactor[AttachReferralDto, Optional[UserDto]]):
         await self.event_publisher.publish(ReferralAttachedEvent(user=referrer, name=referred.name))
 
         return referrer
-
-    def _define_referral_level(self, parent_level: Optional[ReferralLevel]) -> ReferralLevel:
-        if parent_level is None:
-            return ReferralLevel.FIRST
-
-        next_level_value = parent_level.value + 1
-        max_level_value = max(item.value for item in ReferralLevel)
-
-        if next_level_value > max_level_value:
-            return ReferralLevel(parent_level.value)
-
-        return ReferralLevel(next_level_value)

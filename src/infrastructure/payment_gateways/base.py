@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
 from ipaddress import ip_address, ip_network
-from typing import Optional, Protocol, Union
+from typing import Any, Optional, Protocol, Union
 from uuid import UUID
 
 import orjson
@@ -40,6 +40,56 @@ class BasePaymentGateway(ABC):
     @abstractmethod
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResultDto: ...
 
+    async def create_payment(
+        self,
+        amount: Decimal,
+        details: str,
+        idempotency_key: Optional[str] = None,
+    ) -> PaymentResultDto:
+        # Most providers do not expose an idempotency primitive. Keeping this
+        # adapter-level wrapper preserves their existing implementations while
+        # allowing capable providers to bind a durable operation to a stable key.
+        return await self.handle_create_payment(amount, details)
+
+    async def build_payment_request(
+        self,
+        amount: Decimal,
+        details: str,
+        *,
+        return_url: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Build the exact, JSON-serializable request persisted before provider I/O."""
+        return {
+            "version": 1,
+            "amount": str(amount),
+            "details": details,
+            "return_url": return_url,
+        }
+
+    async def create_payment_from_request(
+        self,
+        request_snapshot: dict[str, Any],
+        *,
+        idempotency_key: Optional[str],
+    ) -> PaymentResultDto:
+        try:
+            amount = Decimal(str(request_snapshot["amount"]))
+            details = str(request_snapshot["details"])
+        except (KeyError, ValueError, TypeError) as exc:
+            raise ValueError("Invalid persisted provider request") from exc
+        return await self.create_payment(amount, details, idempotency_key=idempotency_key)
+
+    def payment_owner_fingerprint(self) -> Optional[str]:
+        """Return a non-secret stable fingerprint for replay-owner validation."""
+        return None
+
+    async def verify_payment_result(
+        self,
+        payment_id: UUID,
+        request_snapshot: dict[str, Any],
+    ) -> PaymentResultDto:
+        raise NotImplementedError("This gateway does not support exact payment inspection")
+
     @abstractmethod
     async def handle_webhook(
         self,
@@ -57,14 +107,17 @@ class BasePaymentGateway(ABC):
     async def _get_webhook_data(self, request: Request) -> dict:
         try:
             data = orjson.loads(await request.body())
-            logger.debug(f"Webhook data: {data}")
 
             if not isinstance(data, dict):
                 raise ValueError("Payload is not a dictionary")
 
+            logger.debug("Webhook payload parsed (fields={fields})", fields=sorted(data))
             return data
         except (orjson.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to parse webhook payload: {e}")
+            logger.error(
+                "Failed to parse webhook payload (error_type={error_type})",
+                error_type=type(e).__name__,
+            )
             raise ValueError("Invalid webhook payload") from e
 
     def _make_client(

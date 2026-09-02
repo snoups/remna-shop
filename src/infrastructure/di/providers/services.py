@@ -14,9 +14,16 @@ from src.application.common import (
     PaymentNotificationDispatcher,
     Redirect,
     Remnawave,
+    SubscriptionMutationLock,
     XuiDbReader,
 )
+from src.application.legacy_referral_recovery import (
+    LegacyReferralRecoveryAuthorizer,
+)
 from src.application.services import (
+    PaymentCursorCodec,
+    PaymentIdempotencyService,
+    PaymentReconciliationService,
     PricingService,
     RemnaWebhookService,
 )
@@ -35,6 +42,7 @@ from src.infrastructure.services import (
     PasswordHasherImpl,
     PaymentNotificationDispatcherImpl,
     RedirectImpl,
+    RedisSubscriptionMutationLock,
     RemnawaveImpl,
     SmtpEmailSender,
     WebhookService,
@@ -53,6 +61,12 @@ class ServicesProvider(Provider):
     http_client = provide(source=AiohttpClient, provides=HttpClient)
     redirect = provide(source=RedirectImpl, provides=Redirect)
     pricing = provide(source=PricingService)
+    payment_idempotency = provide(source=PaymentIdempotencyService, scope=Scope.REQUEST)
+    payment_reconciliation = provide(source=PaymentReconciliationService, scope=Scope.REQUEST)
+    payment_cursor = provide(source=PaymentCursorCodec)
+    legacy_referral_recovery_authorizer = provide(
+        source=LegacyReferralRecoveryAuthorizer,
+    )
     event_bus = provide(EventBusImpl)
     publisher = alias(source=EventBusImpl, provides=EventPublisher)
     subscriber = alias(source=EventBusImpl, provides=EventSubscriber)
@@ -62,6 +76,10 @@ class ServicesProvider(Provider):
     webhook = provide(source=WebhookService)
 
     remnawave = provide(source=RemnawaveImpl, provides=Remnawave)
+    subscription_mutation_lock = provide(
+        source=RedisSubscriptionMutationLock,
+        provides=SubscriptionMutationLock,
+    )
     remna_webhook = provide(source=RemnaWebhookService, scope=Scope.REQUEST)
 
     notification_queue = provide(source=NotificationQueue)

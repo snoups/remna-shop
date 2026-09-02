@@ -22,7 +22,7 @@ async def plans_getter(
     formatted_plans = [
         {
             "id": plan.id,
-            "name": i18n.get(plan.name),
+            "name": i18n.get_or_raw(plan.name),
             "is_active": plan.is_active,
         }
         for plan in plans

@@ -2,7 +2,13 @@ from typing_extensions import Final
 
 from src.application.common import Interactor
 
-from .commands.maintenance import CancelOldTransactions, ClearOldBroadcasts
+from .commands.maintenance import (
+    CancelOldTransactions,
+    ClearOldBroadcasts,
+    ReplayPendingPaymentWebhooks,
+    SweepPaymentFulfillments,
+    SweepPaymentOperationAlerts,
+)
 from .commands.menu_editor import (
     ConfirmMenuButtonChanges,
     UpdateMenuButtonColor,
@@ -24,5 +30,8 @@ MISC_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     GetMenuData,
     RedirectMenu,
     CancelOldTransactions,
+    ReplayPendingPaymentWebhooks,
+    SweepPaymentOperationAlerts,
+    SweepPaymentFulfillments,
     ClearOldBroadcasts,
 )

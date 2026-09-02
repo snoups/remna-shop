@@ -6,6 +6,7 @@ from loguru import logger
 from remnapy import RemnawaveSDK
 
 from src.core.config import AppConfig
+from src.infrastructure.remnapy_compat import apply_remnapy_contract_compatibility
 
 
 class RemnawaveProvider(Provider):
@@ -14,6 +15,7 @@ class RemnawaveProvider(Provider):
     @provide
     async def get_remnawave(self, config: AppConfig) -> AsyncIterator[RemnawaveSDK]:
         logger.debug("Initializing RemnawaveSDK")
+        apply_remnapy_contract_compatibility()
 
         headers = {}
         headers["Authorization"] = f"Bearer {config.remnawave.token.get_secret_value()}"

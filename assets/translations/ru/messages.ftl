@@ -104,6 +104,16 @@ msg-menu-invite =
         *[OTHER] { $reward_type }
     }!
 
+    <b>🔗 Две ссылки для приглашения</b>:
+    <blockquote>
+    🤖 Telegram — открыть бота: { $referral_url }
+    { $has_web_referral_url ->
+    [1] 🌐 Clean Pay — регистрация и оплата: { $web_referral_url }
+        ℹ️ Рекомендуется тем, у кого нет доступа к Telegram.
+    *[0] 🌐 Clean Pay — ссылка временно недоступна
+    }
+    </blockquote>
+
     <b>📊 Статистика</b>:
     <blockquote>
     👥 Всего приглашенных: { $referrals }
@@ -154,6 +164,16 @@ msg-menu-invite-about =
     *[OTHER] { $reward_strategy_type }
     }
     </blockquote>
+
+msg-menu-invite-qr =
+    <b>🧾 Выберите ссылку для QR-кода</b>
+
+    🤖 <b>Telegram</b> — открывает бота по вашей реферальной ссылке.
+    🌐 <b>Clean Pay</b> — открывает регистрацию и оплату без Telegram.
+
+msg-invite-qr =
+    .telegram = 🤖 QR-код Telegram-реферальной ссылки
+    .clean-pay = 🌐 QR-код реферальной ссылки Clean Pay
 
 msg-invite-reward = { $value }{ $reward_strategy_type ->
     [AMOUNT] { $reward_type ->
@@ -329,10 +349,10 @@ msg-statistics-referrals =
     <b>👪 Статистика по рефералам</b>
 
     <blockquote>
-    • <b>Всего рефералов</b>: { $total_referrals }
-    • <b>Уровень 1</b>: { $level_1_count }
-    • <b>Уровень 2</b>: { $level_2_count }
-    • <b>Уникальных реферреров</b>: { $unique_referrers }
+    • <b>Регистраций по реферальным ссылкам</b>: { $total_referrals }
+    • <b>Приглашено напрямую (ур. 1)</b>: { $level_1_count }
+    • <b>Приглашено рефералами (ур. 2)</b>: { $level_2_count }
+    • <b>Уникальных рефереров</b>: { $unique_referrers }
     { $top_referrer_id ->
         [0] { empty }
         *[HAS] • <b>Топ реферрер</b>: { $top_referrer_telegram_id ->
@@ -525,8 +545,8 @@ msg-user-statistics =
             *[HAS] <a href="tg://user?id={ $referrer_telegram_id }">@{ $referrer_username }</a>
         }
     }
-    • <b>Приглашенных (ур. 1)</b>: { $referrals_level_1 }
-    • <b>Приглашенных (ур. 2)</b>: { $referrals_level_2 }
+    • <b>Приглашено напрямую (ур. 1)</b>: { $referrals_level_1 }
+    • <b>Приглашено рефералами (ур. 2)</b>: { $referrals_level_2 }
     • <b>Получено поинтов</b>: { $reward_points }
     • <b>Получено дней</b>: { $reward_days }
     </blockquote>

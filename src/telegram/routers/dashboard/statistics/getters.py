@@ -237,7 +237,7 @@ def _detail_reward(
     plan_name = "—"
     if plan_snapshot:
         raw_name = plan_snapshot.get("name", "?")
-        name = i18n.get(raw_name) if raw_name else "?"
+        name = i18n.get_or_raw(raw_name) if raw_name else "?"
         duration = plan_snapshot.get("duration")
         plan_name = f"{name} ({i18n.get('unit-day', value=duration)})" if duration else str(name)
     return i18n.get(

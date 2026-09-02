@@ -3,7 +3,6 @@
 .vscode/
 .code-workspace
 data/*
-tests
 .DS_Store
 traefik
 logs/*
@@ -11,7 +10,8 @@ logs/*
 .history
 .claude
 CLAUDE.md
-docs/
+docs/*
+!docs/email-expiration-reminders-design.md
 
 # Environment
 .venv/

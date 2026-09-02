@@ -121,7 +121,9 @@ class CryptomusGateway(BasePaymentGateway):
     def _generate_signature(self, data: str) -> str:
         base64_encoded = base64.b64encode(data.encode("utf-8")).decode()
         raw_string = f"{base64_encoded}{self.data.settings.api_key.get_secret_value()}"  # type: ignore[union-attr]
-        return hashlib.md5(raw_string.encode()).hexdigest()
+        # Cryptomus mandates MD5 for its protocol signature; this is not used
+        # as a general-purpose password or content hash.
+        return hashlib.md5(raw_string.encode(), usedforsecurity=False).hexdigest()
 
     def _get_payment_data(self, data: dict[str, Any]) -> PaymentResultDto:
         payment_id_str = data.get("order_id")

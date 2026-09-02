@@ -9,6 +9,7 @@ from src.application.use_cases.broadcast import BROADCAST_USE_CASES
 from src.application.use_cases.gateways import GATEWAYS_USE_CASES
 from src.application.use_cases.importer import IMPORTER_USE_CASES
 from src.application.use_cases.misc import MISC_USE_CASES
+from src.application.use_cases.notification import NOTIFICATION_USE_CASES
 from src.application.use_cases.plan import PLAN_USE_CASES
 from src.application.use_cases.promocode import PROMOCODE_USE_CASES
 from src.application.use_cases.referral import REFERRAL_USE_CASES
@@ -32,6 +33,7 @@ class UseCasesProvider(Provider):
         *GATEWAYS_USE_CASES,
         *IMPORTER_USE_CASES,
         *MISC_USE_CASES,
+        *NOTIFICATION_USE_CASES,
         *PLAN_USE_CASES,
         *PROMOCODE_USE_CASES,
         *REFERRAL_USE_CASES,

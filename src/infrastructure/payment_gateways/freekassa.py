@@ -152,7 +152,8 @@ class FreeKassaGateway(BasePaymentGateway):
             f":{self.data.settings.secret_word_2.get_secret_value()}"  # type: ignore[union-attr]
             f":{data.get('MERCHANT_ORDER_ID')}"
         )
-        expected = hashlib.md5(raw.encode()).hexdigest()
+        # FreeKassa mandates MD5 for its protocol signature.
+        expected = hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
 
         if not hmac.compare_digest(expected, sign):
             logger.warning("Invalid webhook signature")

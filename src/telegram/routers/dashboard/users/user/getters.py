@@ -97,7 +97,7 @@ async def user_getter(
             {
                 "status": profile.subscription.current_status,
                 "is_trial": profile.subscription.is_trial,
-                "plan_name": i18n.get(profile.subscription.plan_snapshot.name),
+                "plan_name": i18n.get_or_raw(profile.subscription.plan_snapshot.name),
                 "traffic_limit": i18n_format_traffic_limit(profile.subscription.traffic_limit),
                 "device_limit": i18n_format_device_limit(profile.subscription.device_limit),
                 "expire_time": i18n_format_expire_time(profile.subscription.expire_at),
@@ -154,7 +154,7 @@ async def subscription_getter(
         "node_name": user_profile_subscription.last_node_name,
         #
         "is_trial_plan": subscription.plan_snapshot.is_trial,
-        "plan_name": i18n.get(subscription.plan_snapshot.name),
+        "plan_name": i18n.get_or_raw(subscription.plan_snapshot.name),
         "plan_type": subscription.plan_snapshot.type,
         "plan_traffic_limit": i18n_format_traffic_limit(subscription.plan_snapshot.traffic_limit),
         "plan_device_limit": i18n_format_device_limit(subscription.plan_snapshot.device_limit),
@@ -524,7 +524,7 @@ async def transaction_getter(
         "discount_percent": transaction.pricing.discount_percent,
         "original_amount": transaction.pricing.original_amount,
         "created_at": transaction.created_at.strftime(DATETIME_VIEW_FORMAT),  # type: ignore[union-attr]
-        "plan_name": i18n.get(transaction.plan_snapshot.name),
+        "plan_name": i18n.get_or_raw(transaction.plan_snapshot.name),
         "plan_type": transaction.plan_snapshot.type,
         "plan_traffic_limit": i18n_format_traffic_limit(transaction.plan_snapshot.traffic_limit),
         "plan_device_limit": i18n_format_device_limit(transaction.plan_snapshot.device_limit),
@@ -552,7 +552,7 @@ async def give_access_getter(
 
     formatted_plans = [
         {
-            "plan_name": i18n.get(plan.name),
+            "plan_name": i18n.get_or_raw(plan.name),
             "plan_id": plan.id,
             "selected": (
                 target_user.telegram_id is not None
@@ -587,7 +587,7 @@ async def give_subscription_getter(
 
     formatted_plans = [
         {
-            "plan_name": i18n.get(plan.name),
+            "plan_name": i18n.get_or_raw(plan.name),
             "plan_id": plan.id,
         }
         for plan in plans

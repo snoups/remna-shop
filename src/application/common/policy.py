@@ -64,6 +64,7 @@ class Permission(UpperStrEnum):
     USER_EDITOR = auto()
     USER_SUBSCRIPTION_EDITOR = auto()
     USER_SYNC = auto()
+    USER_MERGE = auto()
     #
     IMPORTER = auto()
     ASSIGN_ROLE = auto()

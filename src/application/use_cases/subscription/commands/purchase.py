@@ -4,7 +4,12 @@ from typing import Optional
 
 from loguru import logger
 
-from src.application.common import EventPublisher, Interactor, Remnawave
+from src.application.common import (
+    EventPublisher,
+    Interactor,
+    Remnawave,
+    SubscriptionMutationLock,
+)
 from src.application.common.dao import SubscriptionDao, UserDao
 from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, TransactionDto, UserDto
@@ -36,15 +41,25 @@ class ActivateTrialSubscription(Interactor[ActivateTrialSubscriptionDto, None]):
         user_dao: UserDao,
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
+        subscription_mutation_lock: SubscriptionMutationLock,
         event_publisher: EventPublisher,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
+        self.subscription_mutation_lock = subscription_mutation_lock
         self.event_publisher = event_publisher
 
     async def _execute(self, actor: UserDto, data: ActivateTrialSubscriptionDto) -> None:
+        async with self.subscription_mutation_lock.hold(data.user.id):
+            await self._execute_locked(actor, data)
+
+    async def _execute_locked(
+        self,
+        actor: UserDto,
+        data: ActivateTrialSubscriptionDto,
+    ) -> None:
         user = data.user
         plan = data.plan
 
@@ -93,7 +108,7 @@ class ActivateTrialSubscription(Interactor[ActivateTrialSubscriptionDto, None]):
             username=user.username,
             name=user.name,
             email=user.email,
-            plan_name=(plan.name, {}),
+            plan_name=plan.name,
             plan_type=plan.type,
             plan_traffic_limit=i18n_format_traffic_limit(plan.traffic_limit),
             plan_device_limit=i18n_format_device_limit(plan.device_limit),
@@ -121,16 +136,28 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
         user_dao: UserDao,
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
+        subscription_mutation_lock: SubscriptionMutationLock,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
+        self.subscription_mutation_lock = subscription_mutation_lock
 
     async def _execute(self, actor: UserDto, data: PurchaseSubscriptionDto) -> None:  # noqa: C901
+        async with self.subscription_mutation_lock.hold(data.user.id):
+            await self._execute_locked(actor, data)
+
+    async def _execute_locked(  # noqa: C901
+        self,
+        actor: UserDto,
+        data: PurchaseSubscriptionDto,
+    ) -> None:
         user = data.user
         transaction = data.transaction
-        subscription = data.subscription
+        # The payment claim may have loaded its snapshot before waiting for another
+        # mutation. Always re-read the current subscription under the shared fence.
+        subscription = await self.subscription_dao.get_current(user.id)
         plan = transaction.plan_snapshot
         purchase_type = transaction.purchase_type
         has_trial = subscription.is_trial if subscription else False
@@ -145,7 +172,7 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
 
         async with self.uow:
             # 1. NEW PURCHASE (NOT TRIAL)
-            if purchase_type == PurchaseType.NEW and not has_trial:
+            if purchase_type == PurchaseType.NEW and not has_trial and subscription is None:
                 created_user = await self.remnawave.create_user(user, plan=plan)
                 new_sub = self._build_subscription_dto(created_user, plan)
 
@@ -162,11 +189,16 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                 logger.debug(f"{actor.log} Created new subscription for user '{user.id}'")
 
             # 2. RENEW (NOT TRIAL)
-            elif purchase_type == PurchaseType.RENEW and not has_trial:
+            elif purchase_type in {PurchaseType.RENEW, PurchaseType.NEW} and not has_trial:
                 if not subscription:
                     raise ValueError(
                         f"No subscription found for renewal for user '{user.remna_name}'"
                     )
+
+                # More than one NEW payment can be confirmed after the first
+                # transaction has already created the subscription (for example,
+                # delayed or previously unprocessable provider callbacks). Preserve
+                # every paid duration instead of trying to create a duplicate user.
 
                 duration = transaction.plan_snapshot.duration
 
@@ -216,11 +248,6 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                         f"No subscription found for change for user '{user.remna_name}'"
                     )
 
-                await self.subscription_dao.update_status(
-                    subscription_id=subscription.id,
-                    status=SubscriptionStatus.DELETED,
-                )
-
                 updated_user = await self.remnawave.update_user(
                     user=user,
                     uuid=subscription.user_remna_id,
@@ -228,11 +255,22 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                     reset_traffic=True,
                 )
 
-                new_sub = self._build_subscription_dto(updated_user, plan)
-                await self.subscription_dao.create(
-                    subscription=new_sub,
-                    user_id=user.id,
-                )
+                # A trial and its paid replacement are the same Remnawave user.
+                # Keep the existing local row and URL as well: replacing the row
+                # made the already-issued trial link appear revoked after payment.
+                paid_subscription = self._build_subscription_dto(updated_user, plan)
+                subscription.status = paid_subscription.status
+                subscription.is_trial = paid_subscription.is_trial
+                subscription.traffic_limit = paid_subscription.traffic_limit
+                subscription.device_limit = paid_subscription.device_limit
+                subscription.traffic_limit_strategy = paid_subscription.traffic_limit_strategy
+                subscription.tag = paid_subscription.tag
+                subscription.internal_squads = paid_subscription.internal_squads
+                subscription.external_squad = paid_subscription.external_squad
+                subscription.expire_at = paid_subscription.expire_at
+                subscription.plan_snapshot = plan
+                subscription.grace_until = None
+                await self.subscription_dao.update(subscription)
 
                 if user.purchase_discount:
                     user.purchase_discount = 0

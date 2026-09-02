@@ -295,9 +295,11 @@ async def _parse_ids_from_message(
 ) -> list[int]:
     if message.document:
         try:
-            assert message.bot is not None
+            if message.bot is None:
+                raise RuntimeError("Telegram message is not bound to a bot")
             file = await message.bot.get_file(message.document.file_id)
-            assert file.file_path is not None
+            if file.file_path is None:
+                raise RuntimeError("Telegram did not return a downloadable file path")
             buf: BytesIO = await message.bot.download_file(file.file_path)  # type: ignore[assignment]
             text = buf.read().decode("utf-8", errors="ignore")
         except Exception as exc:

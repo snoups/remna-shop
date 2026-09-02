@@ -12,7 +12,13 @@ from .payment_gateway import (
 )
 from .plan import PlanDto, PlanDurationDto, PlanPriceDto, PlanSnapshotDto
 from .promocode import PromocodeActivationDto, PromocodeDto
-from .referral import ReferralDto, ReferralRewardDto, UserReferralStatsDto
+from .referral import (
+    LegacyReferralRewardRecoveryDto,
+    ReferralDto,
+    ReferralRewardBackfillAuditDto,
+    ReferralRewardDto,
+    UserReferralStatsDto,
+)
 from .settings import (
     AccessSettingsDto,
     BackupSettingsDto,
@@ -42,7 +48,12 @@ from .statistics import (
     UserStatisticsDto,
 )
 from .subscription import RemnaSubscriptionDto, SquadInfoDto, SubscriptionDto
-from .transaction import PriceDetailsDto, TransactionDto
+from .subscription_email_reminder import (
+    NotificationPreferencesDto,
+    SubscriptionEmailDeliveryDto,
+    SubscriptionEmailReminderDto,
+)
+from .transaction import PaymentWebhookEventDto, PriceDetailsDto, TransactionDto
 from .user import TelegramUserDto, TempUserDto, UserDto, UserOAuthProviderDto
 
 __all__ = [
@@ -76,7 +87,9 @@ __all__ = [
     "PromocodeDto",
     "PromocodeDetailStatisticsDto",
     "PromocodeStatisticsDto",
+    "LegacyReferralRewardRecoveryDto",
     "ReferralDto",
+    "ReferralRewardBackfillAuditDto",
     "ReferralRewardDto",
     "UserReferralStatsDto",
     "AccessSettingsDto",
@@ -97,7 +110,11 @@ __all__ = [
     "RemnaSubscriptionDto",
     "SquadInfoDto",
     "SubscriptionDto",
+    "NotificationPreferencesDto",
+    "SubscriptionEmailDeliveryDto",
+    "SubscriptionEmailReminderDto",
     "PriceDetailsDto",
+    "PaymentWebhookEventDto",
     "TransactionDto",
     "TelegramUserDto",
     "TempUserDto",

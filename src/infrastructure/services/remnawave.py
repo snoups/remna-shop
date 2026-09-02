@@ -22,7 +22,7 @@ from remnapy.models import (
 )
 from remnapy.models.hwid import HwidDeviceDto
 
-from src.application.common import Remnawave
+from src.application.common import Remnawave, SubscriptionMutationLock
 from src.application.common.remnawave import T
 from src.application.dto import (
     PlanSnapshotDto,
@@ -38,8 +38,13 @@ from src.core.utils.time import datetime_now
 
 
 class RemnawaveImpl(Remnawave):
-    def __init__(self, sdk: RemnawaveSDK) -> None:
+    def __init__(
+        self,
+        sdk: RemnawaveSDK,
+        subscription_mutation_lock: SubscriptionMutationLock,
+    ) -> None:
         self.sdk = sdk
+        self.subscription_mutation_lock = subscription_mutation_lock
 
     async def try_connection(self) -> Version:
         for attempt in range(1, 4):
@@ -108,6 +113,26 @@ class RemnawaveImpl(Remnawave):
         subscription: Optional[SubscriptionDto] = None,
         reset_traffic: bool = False,
     ) -> UserResponseDto:
+        # This lower-level fence is the last line of defence for every full user
+        # update. Use cases that read/modify a subscription also hold the same
+        # re-entrant lock around their read so they cannot send a stale expire_at.
+        async with self.subscription_mutation_lock.hold(user.id):
+            return await self._update_user_locked(
+                user=user,
+                uuid=uuid,
+                plan=plan,
+                subscription=subscription,
+                reset_traffic=reset_traffic,
+            )
+
+    async def _update_user_locked(
+        self,
+        user: UserDto,
+        uuid: UUID,
+        plan: Optional[PlanSnapshotDto] = None,
+        subscription: Optional[SubscriptionDto] = None,
+        reset_traffic: bool = False,
+    ) -> UserResponseDto:
         request_dto = self._build_update_request(user, uuid, plan, subscription)
 
         try:
@@ -126,6 +151,31 @@ class RemnawaveImpl(Remnawave):
             await self.reset_traffic(uuid)
 
         return remna_user
+
+    async def reactivate_referral_expiry(
+        self,
+        *,
+        user_id: int,
+        uuid: UUID,
+        expire_at: datetime,
+    ) -> UserResponseDto:
+        """Apply the narrow EXTRA_DAYS patch without clobbering remote-only fields."""
+
+        async with self.subscription_mutation_lock.hold(user_id):
+            request_dto = UpdateUserRequestDto(
+                uuid=uuid,
+                expire_at=expire_at,
+                status=SubscriptionStatus.ACTIVE,
+            )
+            expected_fields = {"uuid", "expire_at", "status"}
+            if request_dto.model_fields_set != expected_fields:
+                raise RuntimeError("Unsafe Remnawave referral expiry request shape")
+            remna_user = await self.sdk.users.update_user(request_dto)
+            logger.info(
+                f"Reactivated referral expiry for RemnaUser '{uuid}' through "
+                "a narrow UUID/status/expiry patch"
+            )
+            return remna_user
 
     async def apply_grace(
         self,

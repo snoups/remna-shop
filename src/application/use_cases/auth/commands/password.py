@@ -1,4 +1,6 @@
+import hashlib
 import hmac
+import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -20,12 +22,20 @@ from src.application.use_cases.auth._codes import (
 )
 from src.core.config import AppConfig
 from src.core.constants import (
-    EMAIL_CODE_MAX_ATTEMPTS,
     EMAIL_CODE_RESEND_COOLDOWN_SECONDS,
     EMAIL_PASSWORD_RESET_BODY_TEMPLATE,
     EMAIL_PASSWORD_RESET_SUBJECT,
 )
 from src.core.utils.time import datetime_now
+
+PASSWORD_RESET_MAX_ATTEMPTS = 5
+PASSWORD_RESET_ATTEMPT_WINDOW_SECONDS = 15 * 60
+PASSWORD_RESET_LOCK_SECONDS = 60
+
+
+def password_reset_identity(email: str, secret: str) -> str:
+    normalized_email = email.strip().casefold()
+    return hmac.new(secret.encode(), normalized_email.encode(), hashlib.sha256).hexdigest()
 
 
 @dataclass
@@ -96,15 +106,30 @@ class RequestPasswordReset(Interactor[RequestPasswordResetDto, PasswordResetRequ
         uow: UnitOfWork,
         user_dao: UserDao,
         email_sender: EmailSender,
+        auth_session: AuthSessionDao,
     ) -> None:
         self.config = config
         self.uow = uow
         self.user_dao = user_dao
         self.email_sender = email_sender
+        self.auth_session = auth_session
 
     async def _execute(
         self, actor: UserDto, data: RequestPasswordResetDto
     ) -> PasswordResetRequested:
+        identity_hash = password_reset_identity(
+            data.email, self.config.crypt_key.get_secret_value()
+        )
+        try:
+            reserved = await self.auth_session.reserve_password_reset_request(
+                identity_hash, EMAIL_CODE_RESEND_COOLDOWN_SECONDS
+            )
+        except Exception:
+            logger.warning("Password reset request limiter is unavailable")
+            return PasswordResetRequested()
+        if not reserved:
+            return PasswordResetRequested()
+
         user = await self.user_dao.get_by_email(data.email)
         if not user or not user.password_hash or user.is_blocked:
             return PasswordResetRequested()
@@ -137,7 +162,10 @@ class RequestPasswordReset(Interactor[RequestPasswordResetDto, PasswordResetRequ
                 ),
             )
         except Exception as e:
-            logger.warning(f"Password reset email delivery failed: {e}")
+            logger.warning(
+                "Password reset email delivery failed (error_type={error_type})",
+                error_type=type(e).__name__,
+            )
             return PasswordResetRequested()
 
         user.password_reset_code_hash = hash_email_verification_code(
@@ -149,9 +177,11 @@ class RequestPasswordReset(Interactor[RequestPasswordResetDto, PasswordResetRequ
         async with self.uow:
             updated = await self.user_dao.update(user)
             if not updated:
-                logger.warning(f"User '{user.id}' disappeared during password reset request")
+                logger.warning("User disappeared during password reset request")
                 return PasswordResetRequested()
             await self.uow.commit()
+
+        await self.auth_session.clear_password_reset_attempts(identity_hash)
 
         return PasswordResetRequested()
 
@@ -181,72 +211,79 @@ class ConfirmPasswordReset(Interactor[ConfirmPasswordResetDto, UserDto]):
         self.password_hasher = password_hasher
 
     async def _execute(self, actor: UserDto, data: ConfirmPasswordResetDto) -> UserDto:
-        user = await self.user_dao.get_by_email(data.email)
-        if not user or not user.password_hash or user.is_blocked:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset code",
-            )
-
-        if not user.password_reset_code_hash or not user.password_reset_expires_at:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password reset was not requested",
-            )
-        if user.password_reset_expires_at < datetime_now():
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="Password reset code has expired",
-            )
-
-        incoming_hash = hash_email_verification_code(
-            data.code, self.config.crypt_key.get_secret_value()
+        secret = self.config.crypt_key.get_secret_value()
+        identity_hash = password_reset_identity(data.email, secret)
+        attempts = await self.auth_session.increment_password_reset_attempts(
+            identity_hash, PASSWORD_RESET_ATTEMPT_WINDOW_SECONDS
         )
-        if not hmac.compare_digest(incoming_hash, user.password_reset_code_hash):
-            await self._register_failed_attempt(user)
+        if attempts > PASSWORD_RESET_MAX_ATTEMPTS:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset code",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many password reset attempts",
             )
 
-        if self.password_hasher.verify(data.new_password, user.password_hash):
+        lock_token = secrets.token_urlsafe(24)
+        locked = await self.auth_session.acquire_password_reset_lock(
+            identity_hash, lock_token, PASSWORD_RESET_LOCK_SECONDS
+        )
+        if not locked:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="New password must be different from current password",
+                detail="Password reset is already in progress",
             )
 
-        user.password_hash = self.password_hasher.hash(data.new_password)
-        user.password_reset_code_hash = None
-        user.password_reset_expires_at = None
-        user.password_reset_attempts = 0
-        user.token_version += 1
+        try:
+            async with self.uow:
+                user = await self.user_dao.get_by_email_for_update(data.email)
+                if not user or not user.password_hash or user.is_blocked:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid or expired reset code",
+                    )
 
-        async with self.uow:
-            updated = await self.user_dao.update(user)
-            if not updated:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User not found during password reset",
-                )
-            await self.uow.commit()
+                if not user.password_reset_code_hash or not user.password_reset_expires_at:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Password reset was not requested",
+                    )
+                if user.password_reset_expires_at < datetime_now():
+                    raise HTTPException(
+                        status_code=status.HTTP_410_GONE,
+                        detail="Password reset code has expired",
+                    )
+
+                incoming_hash = hash_email_verification_code(data.code, secret)
+                if not hmac.compare_digest(incoming_hash, user.password_reset_code_hash):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Invalid or expired reset code",
+                    )
+
+                if self.password_hasher.verify(data.new_password, user.password_hash):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="New password must be different from current password",
+                    )
+
+                user.password_hash = self.password_hasher.hash(data.new_password)
+                user.password_reset_code_hash = None
+                user.password_reset_expires_at = None
+                user.password_reset_attempts = 0
+                user.token_version += 1
+
+                updated = await self.user_dao.update(user)
+                if not updated:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="User not found during password reset",
+                    )
+                await self.uow.commit()
+        finally:
+            try:
+                await self.auth_session.release_password_reset_lock(identity_hash, lock_token)
+            except Exception:
+                logger.warning("Password reset lock release failed; waiting for lock expiry")
 
         await self.auth_session.revoke_all_user_tokens(user.id)
+        await self.auth_session.clear_password_reset_attempts(identity_hash)
         return updated
-
-    async def _register_failed_attempt(self, user: UserDto) -> None:
-        """Count a wrong code and burn the code once the attempt budget is spent.
-
-        A 6-digit code is only 10^6 wide, so without a cap it could be exhausted well
-        inside its TTL. After EMAIL_CODE_MAX_ATTEMPTS the user must request a new one.
-        """
-        user.password_reset_attempts += 1
-        exhausted = user.password_reset_attempts >= EMAIL_CODE_MAX_ATTEMPTS
-
-        if exhausted:
-            user.password_reset_code_hash = None
-            user.password_reset_expires_at = None
-            logger.warning(f"Password reset code invalidated for user '{user.id}': too many tries")
-
-        async with self.uow:
-            await self.user_dao.update(user)
-            await self.uow.commit()

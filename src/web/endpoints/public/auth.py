@@ -1,7 +1,8 @@
 from dishka import FromDishka
 from dishka.integrations.fastapi import inject
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, Security, status
 
+from src.application.common.dao import UserDao
 from src.application.common.dao.auth import AuthSessionDao
 from src.application.dto import UserDto
 from src.application.use_cases.auth.commands.email import (
@@ -11,6 +12,12 @@ from src.application.use_cases.auth.commands.email import (
     ConfirmEmailVerificationDto,
     RequestEmailVerification,
     RequestEmailVerificationDto,
+)
+from src.application.use_cases.auth.commands.generic_email import (
+    CompleteGenericEmailAuth,
+    CompleteGenericEmailAuthDto,
+    StartGenericEmailAuth,
+    StartGenericEmailAuthDto,
 )
 from src.application.use_cases.auth.commands.login import LoginEmailUser, LoginEmailUserDto
 from src.application.use_cases.auth.commands.password import (
@@ -33,27 +40,45 @@ from src.application.use_cases.auth.commands.telegram import (
     LinkTelegramData,
     TelegramAuthData,
 )
+from src.application.use_cases.notification import (
+    GetNotificationPreferences,
+    UpdateNotificationPreferences,
+)
+from src.application.use_cases.notification.commands import (
+    NotificationDeliveryUnavailableError,
+    NotificationEmailNotEligibleError,
+    UpdateNotificationPreferencesDto,
+)
 from src.core.config import AppConfig
 from src.core.exceptions import EmailDeliveryDisabledError, EmailDeliveryError
+from src.web.dependencies import require_auth_service_key
 from src.web.schemas import (
     AuthResponse,
     ChangeEmailRequest,
     ChangeEmailResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
+    CompleteGenericEmailAuthRequest,
     ConfirmEmailVerificationRequest,
     ConfirmEmailVerificationResponse,
     ConfirmPasswordResetRequest,
+    GenericEmailAuthStartResponse,
+    IdentifyEmailResponse,
     LoginRequest,
     LogoutResponse,
     MeResponse,
+    NotificationPreferencesResponse,
+    PasswordResetConfirmResponse,
     PasswordResetResponse,
     RegisterRequest,
     RequestEmailVerificationCodeRequest,
     RequestEmailVerificationCodeResponse,
     RequestPasswordResetRequest,
+    ServiceSessionRequest,
+    StartGenericEmailAuthRequest,
     TelegramAuthRequest,
     TelegramWebAppAuthRequest,
+    UpdateNotificationPreferencesRequest,
 )
 
 from ._common import (
@@ -63,7 +88,37 @@ from ._common import (
     set_auth_cookies,
 )
 
-router = APIRouter(prefix="/auth", tags=["Public - Auth"])
+router = APIRouter(
+    prefix="/auth",
+    tags=["Public - Auth"],
+    dependencies=[Security(require_auth_service_key)],
+)
+
+
+@router.post("/identify", response_model=IdentifyEmailResponse)
+@inject
+async def identify_email_user(
+    body: StartGenericEmailAuthRequest,
+    user_dao: FromDishka[UserDao],
+) -> IdentifyEmailResponse:
+    return IdentifyEmailResponse(exists=await user_dao.get_by_email(body.email) is not None)
+
+
+@router.post("/service-session", response_model=AuthResponse)
+@inject
+async def create_service_session(
+    body: ServiceSessionRequest,
+    response: Response,
+    config: FromDishka[AppConfig],
+    user_dao: FromDishka[UserDao],
+    auth_session: FromDishka[AuthSessionDao],
+) -> AuthResponse:
+    user = await user_dao.get_by_email(body.email)
+    if not user or not user.is_email_verified or str(user.id) != body.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verified user not found")
+    if user.is_blocked:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is blocked")
+    return await _issue_and_set(user, response, config, auth_session)
 
 
 def _to_me_response(user: UserDto) -> MeResponse:
@@ -72,6 +127,7 @@ def _to_me_response(user: UserDto) -> MeResponse:
         auth_type=user.auth_type,
         email=user.email,
         is_email_verified=user.is_email_verified,
+        has_password=bool(user.password_hash),
         pending_email=user.pending_email,
         name=user.name,
         username=user.username,
@@ -121,6 +177,39 @@ async def login_public_user(
 ) -> AuthResponse:
     user = await login_email_user.system(
         LoginEmailUserDto(email=body.email, password=body.password)
+    )
+    return await _issue_and_set(user, response, config, auth_session)
+
+
+@router.post(
+    "/email/start",
+    response_model=GenericEmailAuthStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+@inject
+async def start_generic_email_auth(
+    body: StartGenericEmailAuthRequest,
+    start_email_auth: FromDishka[StartGenericEmailAuth],
+) -> GenericEmailAuthStartResponse:
+    await start_email_auth.system(StartGenericEmailAuthDto(email=body.email))
+    return GenericEmailAuthStartResponse(success=True)
+
+
+@router.post("/email/complete", response_model=AuthResponse)
+@inject
+async def complete_generic_email_auth(
+    body: CompleteGenericEmailAuthRequest,
+    response: Response,
+    config: FromDishka[AppConfig],
+    complete_email_auth: FromDishka[CompleteGenericEmailAuth],
+    auth_session: FromDishka[AuthSessionDao],
+) -> AuthResponse:
+    user = await complete_email_auth.system(
+        CompleteGenericEmailAuthDto(
+            email=body.email,
+            code=body.code,
+            password=body.password,
+        )
     )
     return await _issue_and_set(user, response, config, auth_session)
 
@@ -214,6 +303,58 @@ async def get_public_user_profile(user: CurrentUser) -> MeResponse:
     return _to_me_response(user)
 
 
+def _to_notification_preferences_response(
+    preferences: object,
+) -> NotificationPreferencesResponse:
+    # Keep the web mapping explicit so the application DTO remains framework-free.
+    return NotificationPreferencesResponse.model_validate(preferences, from_attributes=True)
+
+
+@router.get(
+    "/notification-preferences",
+    response_model=NotificationPreferencesResponse,
+)
+@inject
+async def get_notification_preferences(
+    user: CurrentUser,
+    get_preferences: FromDishka[GetNotificationPreferences],
+) -> NotificationPreferencesResponse:
+    preferences = await get_preferences(user)
+    return _to_notification_preferences_response(preferences)
+
+
+@router.patch(
+    "/notification-preferences",
+    response_model=NotificationPreferencesResponse,
+)
+@inject
+async def update_notification_preferences(
+    body: UpdateNotificationPreferencesRequest,
+    user: CurrentUser,
+    update_preferences: FromDishka[UpdateNotificationPreferences],
+) -> NotificationPreferencesResponse:
+    try:
+        preferences = await update_preferences(
+            user,
+            UpdateNotificationPreferencesDto(
+                subscription_expiration_email_enabled=(
+                    body.subscription_expiration_email_enabled
+                )
+            ),
+        )
+    except NotificationDeliveryUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except NotificationEmailNotEligibleError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return _to_notification_preferences_response(preferences)
+
+
 @router.post("/change-password", response_model=ChangePasswordResponse)
 @inject
 async def change_public_user_password(
@@ -243,22 +384,31 @@ async def request_password_reset(
     return PasswordResetResponse(success=True)
 
 
-@router.post("/password/confirm-reset", response_model=PasswordResetResponse)
+@router.post("/password/confirm-reset", response_model=PasswordResetConfirmResponse)
 @inject
 async def confirm_password_reset(
     body: ConfirmPasswordResetRequest,
     response: Response,
+    config: FromDishka[AppConfig],
     confirm_password_reset_uc: FromDishka[ConfirmPasswordReset],
-) -> PasswordResetResponse:
-    await confirm_password_reset_uc.system(
+    auth_session: FromDishka[AuthSessionDao],
+) -> PasswordResetConfirmResponse:
+    user = await confirm_password_reset_uc.system(
         ConfirmPasswordResetDto(
             email=body.email,
             code=body.code,
             new_password=body.new_password,
         )
     )
-    clear_auth_cookies(response)
-    return PasswordResetResponse(success=True)
+    # The reset use case revokes every old session. Issue a new session only
+    # after the password change has committed, so a successful response never
+    # leaves the browser in an ambiguous logged-out state.
+    auth = await _issue_and_set(user, response, config, auth_session)
+    return PasswordResetConfirmResponse(
+        success=True,
+        expires_at=auth.expires_at,
+        refresh_expires_at=auth.refresh_expires_at,
+    )
 
 
 @router.post("/email/change", response_model=ChangeEmailResponse)

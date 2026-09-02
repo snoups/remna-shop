@@ -88,7 +88,8 @@ class CheckChannelSubscription(Interactor[None, CheckChannelSubscriptionResultDt
         channel_link = req.channel_link.get_secret_value()
         channel_url = req.channel_url
 
-        assert actor.telegram_id is not None
+        if actor.telegram_id is None:
+            raise RuntimeError("Channel subscription check requires a Telegram identity")
 
         chat_id: Union[str, int, None] = None
         if req.channel_has_username:

@@ -13,6 +13,7 @@ from .base import BaseDto, TrackableMixin
 class PaymentResultDto:
     id: UUID
     url: Optional[str] = None
+    provider_status: Optional[str] = None
 
 
 @dataclass(kw_only=True)

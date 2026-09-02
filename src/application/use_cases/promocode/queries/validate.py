@@ -54,7 +54,8 @@ class ValidatePromocode(Interactor[ValidatePromocodeDto, PromocodeDto]):
             logger.info(f"{actor.log} Promocode '{code}' not found or inactive")
             raise PromocodeNotFoundError(f"Promocode '{code}' not found")
 
-        assert promo.id is not None
+        if promo.id is None:
+            raise RuntimeError("A persisted promocode must have an id")
 
         if promo.expires_at is not None and datetime_now() > promo.expires_at:
             logger.info(f"{actor.log} Promocode '{code}' expired")

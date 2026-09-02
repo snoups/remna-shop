@@ -5,7 +5,7 @@ from typing import Optional
 from adaptix import Retort
 from loguru import logger
 
-from src.application.common import EventPublisher, Interactor
+from src.application.common import EventPublisher, Interactor, SubscriptionMutationLock
 from src.application.common.dao import PromocodeDao, SubscriptionDao, UserDao
 from src.application.common.policy import Permission
 from src.application.common.remnawave import Remnawave
@@ -48,6 +48,7 @@ class ActivatePromocode(Interactor[ActivatePromocodeDto, PromocodeDto]):
         validate_promocode: ValidatePromocode,
         event_publisher: EventPublisher,
         retort: Retort,
+        subscription_mutation_lock: SubscriptionMutationLock,
     ) -> None:
         self.uow = uow
         self.promocode_dao = promocode_dao
@@ -57,8 +58,17 @@ class ActivatePromocode(Interactor[ActivatePromocodeDto, PromocodeDto]):
         self.validate_promocode = validate_promocode
         self.event_publisher = event_publisher
         self.retort = retort
+        self.subscription_mutation_lock = subscription_mutation_lock
 
     async def _execute(self, actor: UserDto, data: ActivatePromocodeDto) -> PromocodeDto:
+        async with self.subscription_mutation_lock.hold(data.user.id):
+            return await self._execute_locked(actor, data)
+
+    async def _execute_locked(
+        self,
+        actor: UserDto,
+        data: ActivatePromocodeDto,
+    ) -> PromocodeDto:
         user = data.user
 
         promo = await self.validate_promocode(
@@ -72,7 +82,8 @@ class ActivatePromocode(Interactor[ActivatePromocodeDto, PromocodeDto]):
         pending = await self._apply_reward_remote(actor, user, promo, subscription)
 
         async with self.uow:
-            assert promo.id is not None
+            if promo.id is None:
+                raise RuntimeError("A persisted promocode must have an id")
             activation = PromocodeActivationDto(
                 promocode_id=promo.id,
                 user_id=user.id,
@@ -97,7 +108,7 @@ class ActivatePromocode(Interactor[ActivatePromocodeDto, PromocodeDto]):
             promocode_code=promo.code,
             reward_type=promo.reward_type.value,
             reward=promo.reward,
-            plan_name=(str(promo.plan_snapshot.get("name")), {})
+            plan_name=str(promo.plan_snapshot.get("name"))
             if promo.plan_snapshot and promo.plan_snapshot.get("name")
             else "",
         )

@@ -6,7 +6,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from remnapy.models.webhook import HwidUserDeviceDto, NodeDto, TorrentBlockerReportDto
 
-from src.application.common import BotService, EventPublisher
+from src.application.common import BotService, EventPublisher, SubscriptionMutationLock
 from src.application.common.dao import SubscriptionDao, UserDao
 from src.application.common.uow import UnitOfWork
 from src.application.dto import SubscriptionDto, UserDto
@@ -57,6 +57,7 @@ class RemnaWebhookService:
         event_bus: EventPublisher,
         redis: Redis,
         bot_service: BotService,
+        subscription_mutation_lock: SubscriptionMutationLock,
         #
         sync_user: SyncRemnaUser,
         enter_grace_mode: EnterGraceMode,
@@ -68,6 +69,7 @@ class RemnaWebhookService:
         self.event_bus = event_bus
         self.redis = redis
         self.bot_service = bot_service
+        self.subscription_mutation_lock = subscription_mutation_lock
         #
         self.sync_user = sync_user
         self.enter_grace_mode = enter_grace_mode
@@ -88,6 +90,14 @@ class RemnaWebhookService:
             await self._process_sync(event, remna_user)
             return
 
+        if event == RemnaUserEvent.TRAFFIC_RESET:
+            # Remnashop does not persist consumed traffic.  Remnawave remains the
+            # source of truth, so this event intentionally has no local mutation.
+            logger.debug(
+                f"Traffic reset acknowledged for RemnaUser '{remna_user.telegram_id}'"
+            )
+            return
+
         user = await self.user_dao.get_by_remna_uuid(remna_user.uuid)
         if not user:
             logger.warning(f"Local user not found for remna_uuid '{remna_user.uuid}'")
@@ -103,7 +113,7 @@ class RemnaWebhookService:
 
         if event == RemnaUserEvent.DELETED:
             logger.debug(f"Executing deletion for RemnaUser '{remna_user.telegram_id}'")
-            await self._process_delete_subscription(remna_user)
+            await self._process_delete_subscription(remna_user, user.id)
 
         elif event in {
             RemnaUserEvent.REVOKED,
@@ -182,6 +192,19 @@ class RemnaWebhookService:
 
     async def handle_node_event(self, event: str, node: NodeDto) -> None:
         logger.info(f"Received node event '{event}' for node '{node.name}'")
+
+        if event in {
+            RemnaNodeEvent.CREATED,
+            RemnaNodeEvent.MODIFIED,
+            RemnaNodeEvent.DISABLED,
+            RemnaNodeEvent.ENABLED,
+            RemnaNodeEvent.DELETED,
+        }:
+            # These are valid Remnawave lifecycle notifications, but Remnashop
+            # has no user-facing action for them. Treating them as unhandled
+            # warnings makes normal panel administration look like an incident.
+            logger.debug(f"Ignored informational node event '{event}' for node '{node.name}'")
+            return
 
         if event not in {
             RemnaNodeEvent.CONNECTION_LOST,
@@ -368,34 +391,39 @@ class RemnaWebhookService:
         dto = SyncRemnaUserDto(remna_user=remna_user, creating=(event == RemnaUserEvent.CREATED))
         await self.sync_user.system(dto)
 
-    async def _process_delete_subscription(self, remna_user: RemnaUserDto) -> None:
-        async with self.uow:
-            subscription = await self.subscription_dao.get_by_remna_id(remna_user.uuid)
+    async def _process_delete_subscription(
+        self,
+        remna_user: RemnaUserDto,
+        user_id: int,
+    ) -> None:
+        async with self.subscription_mutation_lock.hold(user_id):
+            async with self.uow:
+                # Refetch under the same fence used by EXTRA_DAYS and sync writers.
+                subscription = await self.subscription_dao.get_by_remna_id(remna_user.uuid)
 
-            if not subscription:
-                logger.warning(
-                    f"Subscription not found for UUID '{remna_user.uuid}', delete aborted"
-                )
-                return
-
-            user_id = subscription.user_id
-            subscription.status = SubscriptionStatus.DELETED
-            await self.subscription_dao.update(subscription)
-
-            current_subscription = await self.subscription_dao.get_current(user_id)
-
-            if current_subscription:
-                if current_subscription.user_remna_id != subscription.user_remna_id:
-                    logger.debug(
-                        f"Subscription '{subscription.user_remna_id}' "
-                        f"is not current for user_id '{user_id}', skipping unlinking"
+                if not subscription:
+                    logger.warning(
+                        f"Subscription not found for UUID '{remna_user.uuid}', delete aborted"
                     )
-                else:
-                    logger.debug(f"Unlinked current subscription for user_id '{user_id}'")
-                    await self.user_dao.clear_current_subscription(user_id)
+                    return
 
-            await self.uow.commit()
-            logger.info(f"Successfully processed deletion for subscription '{remna_user.uuid}'")
+                subscription.status = SubscriptionStatus.DELETED
+                await self.subscription_dao.update(subscription)
+
+                current_subscription = await self.subscription_dao.get_current(user_id)
+
+                if current_subscription:
+                    if current_subscription.user_remna_id != subscription.user_remna_id:
+                        logger.debug(
+                            f"Subscription '{subscription.user_remna_id}' "
+                            f"is not current for user_id '{user_id}', skipping unlinking"
+                        )
+                    else:
+                        logger.debug(f"Unlinked current subscription for user_id '{user_id}'")
+                        await self.user_dao.clear_current_subscription(user_id)
+
+                await self.uow.commit()
+                logger.info(f"Successfully processed deletion for subscription '{remna_user.uuid}'")
 
     async def _process_status(
         self,

@@ -30,7 +30,9 @@ USERNAME_PATTERN: Pattern[str] = re.compile(r"^@[a-zA-Z0-9_]{5,32}$")
 INVITE_LINK_PATTERN: Pattern[str] = re.compile(r"^https://t\.me/(\+|joinchat/)[A-Za-z0-9_\-]+")
 
 REMNAWAVE_MIN_VERSION: Final[Version] = Version("2.7.0")
-REMNAWAVE_MAX_VERSION: Final[Version] = Version("2.8.0")
+# Exclusive upper bound.  The 2.8.0 API/webhook contracts are covered by the
+# compatibility layer and regression suite; warn only for a newer panel.
+REMNAWAVE_MAX_VERSION: Final[Version] = Version("2.8.1")
 
 REPOSITORY: Final[str] = "https://github.com/snoups/remnashop"
 DOCS: Final[str] = "https://remnashop.mintlify.app"
@@ -43,6 +45,11 @@ REMNAWAVE_WEBHOOK_PATH: Final[str] = "/remnawave"
 IMPORTED_TAG: Final[str] = "IMPORTED"
 INLINE_QUERY_INVITE: Final[str] = "invite"
 REMNASHOP_PREFIX: Final[str] = "rs_"
+PROVIDER_SUCCEEDED_REFERRAL_EVIDENCE_SHA256: Final[str] = (
+    "16c080ccfd92d6adc1e82f56214fd71190aca28077942a625a991a1544ff935e"
+)
+PROVIDER_SUCCEEDED_REFERRAL_REWARD_ID: Final[int] = 65
+PROVIDER_SUCCEEDED_REFERRAL_SOURCE_TRANSACTION_ID: Final[int] = 1761
 WEB_PREFIX: Final[str] = "web_"
 PAYMENT_PREFIX: Final[str] = "payment_"
 GOTO_PREFIX: Final[str] = "gt_"

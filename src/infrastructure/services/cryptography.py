@@ -4,7 +4,7 @@ import secrets
 import string
 from typing import Any, Awaitable, Callable, Final, Optional
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from loguru import logger
 from pydantic import SecretStr
 
@@ -44,12 +44,7 @@ class CryptographerImpl(Cryptographer):
         return value
 
     def decrypt(self, data: str) -> str:
-        try:
-            decrypted = self.fernet.decrypt(data.removeprefix(ENCRYPTED_PREFIX).encode()).decode()
-            return decrypted
-        except Exception as e:
-            logger.error(f"Failed to decrypt data due to error '{e}'")
-            raise
+        return self.fernet.decrypt(data.removeprefix(ENCRYPTED_PREFIX).encode()).decode()
 
     def decrypt_recursive(self, value: Any) -> Any:
         if isinstance(value, str):
@@ -57,9 +52,20 @@ class CryptographerImpl(Cryptographer):
                 try:
                     decrypted = self.decrypt(value)
                     return SecretStr(decrypted)
+                except InvalidToken:
+                    # A ciphertext encrypted with another key must never be passed
+                    # downstream as if it were a usable credential.  Returning
+                    # None makes GatewaySettingsDto.is_configured fail closed and
+                    # requires an operator to enter a fresh secret before enabling
+                    # the gateway.
+                    logger.warning(
+                        "Encrypted credential cannot be decrypted with the configured key; "
+                        "treating it as missing"
+                    )
+                    return None
                 except Exception:
-                    logger.warning(f"Could not decrypt value starting with '{value[:10]}'")
-                    return value
+                    logger.exception("Unexpected encrypted credential decoding failure")
+                    raise
             return value
 
         if isinstance(value, list):

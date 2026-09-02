@@ -6,13 +6,15 @@ from adaptix import Retort
 from adaptix.conversion import ConversionRetort
 from loguru import logger
 from redis.asyncio import Redis
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.common.dao import UserDao
 from src.application.dto import UserDto
 from src.core.enums import Role, SubscriptionStatus
 from src.infrastructure.database.models import Referral, Subscription, User
+
+MAX_USER_MERGE_CHAIN_DEPTH = 64
 
 
 class UserDaoImpl(UserDao):
@@ -89,6 +91,16 @@ class UserDaoImpl(UserDao):
         logger.debug(f"User with email '{email}' not found")
         return None
 
+    async def get_by_email_for_update(self, email: str) -> Optional[UserDto]:
+        stmt = select(User).where(User.email == email).with_for_update()
+        db_user = await self.session.scalar(stmt)
+
+        if db_user:
+            return self._convert_to_dto(db_user)
+
+        logger.debug(f"User with email '{email}' not found for update")
+        return None
+
     async def get_by_telegram_ids(self, telegram_ids: list[int]) -> list[UserDto]:
         if not telegram_ids:
             return []
@@ -117,12 +129,39 @@ class UserDaoImpl(UserDao):
     async def get_by_referral_code(self, referral_code: str) -> Optional[UserDto]:
         stmt = select(User).where(User.referral_code == referral_code)
         db_user = await self.session.scalar(stmt)
+        if db_user is None:
+            logger.debug(f"User with referral code '{referral_code}' not found")
+            return None
 
-        if db_user:
-            logger.debug(f"User with referral code '{referral_code}' found")
-            return self._convert_to_dto(db_user)
+        visited: set[int] = set()
+        for _ in range(MAX_USER_MERGE_CHAIN_DEPTH):
+            if db_user is None:
+                logger.warning(
+                    f"Referral code '{referral_code}' points to a missing merge target"
+                )
+                return None
 
-        logger.debug(f"User with referral code '{referral_code}' not found")
+            if db_user.id in visited:
+                logger.error(
+                    f"Referral code '{referral_code}' has a cyclic user merge chain"
+                )
+                return None
+            visited.add(db_user.id)
+
+            if db_user.merged_into_user_id is None:
+                logger.debug(
+                    f"User with referral code '{referral_code}' resolved to "
+                    f"canonical user_id '{db_user.id}'"
+                )
+                return self._convert_to_dto(db_user)
+
+            db_user = await self.session.scalar(
+                select(User).where(User.id == db_user.merged_into_user_id)
+            )
+
+        logger.error(
+            f"Referral code '{referral_code}' exceeds the maximum user merge chain depth"
+        )
         return None
 
     async def get_all(self, limit: Optional[int] = None, offset: int = 0) -> list[UserDto]:
@@ -150,6 +189,53 @@ class UserDaoImpl(UserDao):
 
         logger.warning(f"Failed to update user '{user.id}'")
         return None
+
+    async def set_subscription_expiration_email_preference(
+        self,
+        user_id: int,
+        *,
+        enabled: bool,
+    ) -> Optional[UserDto]:
+        conditions = [User.id == user_id]
+        if enabled:
+            # This conditional UPDATE is the concurrency boundary with e-mail
+            # change and account merge. PostgreSQL serializes row updates, then
+            # re-evaluates these predicates against the current committed row.
+            conditions.extend(
+                [
+                    User.email.is_not(None),
+                    User.is_email_verified.is_(True),
+                    User.is_blocked.is_(False),
+                    User.merged_into_user_id.is_(None),
+                ]
+            )
+        consent_enabled_at = (
+            case(
+                (
+                    User.subscription_expiration_email_enabled.is_(True),
+                    User.subscription_expiration_email_enabled_at,
+                ),
+                # Evaluate consent time only after PostgreSQL acquires the row
+                # lock and rechecks the conditional UPDATE predicates. An app-
+                # side timestamp could predate a concurrent e-mail change.
+                else_=func.clock_timestamp(),
+            )
+            if enabled
+            else None
+        )
+        stmt = (
+            update(User)
+            .where(*conditions)
+            .values(
+                subscription_expiration_email_enabled=enabled,
+                subscription_expiration_email_enabled_at=consent_enabled_at,
+            )
+            .returning(User)
+        )
+        db_user = await self.session.scalar(stmt)
+        if db_user is None:
+            return None
+        return self._convert_to_dto(db_user)
 
     async def delete(self, user_id: int) -> bool:
         stmt = delete(User).where(User.id == user_id).returning(User.id)

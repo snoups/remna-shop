@@ -29,6 +29,16 @@ ENV PYTHONPATH=/opt/remnashop
 COPY ./src ./src
 COPY ./assets /opt/remnashop/assets.default
 
+# Release builds must use a real application version (for example, v0.8.3).
+# Docker image names and commit identifiers belong in the image tag/labels,
+# not in BUILD_TAG, because the hourly update task parses this value.
+RUN if [ -n "$BUILD_TAG" ] && [ "$BUILD_TAG" != "dev" ]; then \
+        python -c 'import sys; from packaging.version import Version; Version(sys.argv[1].removeprefix("v"))' "$BUILD_TAG"; \
+    fi
+
 COPY ./docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+COPY ./docker-migrate.sh ./docker-migrate.sh
+RUN sed -i 's/\r$//' ./docker-entrypoint.sh \
+    && sed -i 's/\r$//' ./docker-migrate.sh \
+    && chmod +x ./docker-entrypoint.sh ./docker-migrate.sh
 CMD ["./docker-entrypoint.sh"]

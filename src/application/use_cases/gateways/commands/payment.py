@@ -1,5 +1,9 @@
+import hashlib
+import secrets
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
+from typing import Optional
 from uuid import UUID
 
 from loguru import logger
@@ -18,6 +22,7 @@ from src.application.common.dao import (
     TransactionDao,
     UserDao,
 )
+from src.application.common.dao.payment_operation import PaymentOperationRecoveryMode
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import (
@@ -47,6 +52,11 @@ from src.application.dto.payment_gateway import (
     YooMoneyGatewaySettingsDto,
 )
 from src.application.events import UserPurchaseEvent
+from src.application.services.payment_idempotency import PaymentIdempotencyService
+from src.application.services.payment_recovery_snapshot import (
+    build_payment_response,
+    build_resolved_payment_snapshot,
+)
 from src.application.use_cases.gateways.queries.providers import GetPaymentGatewayInstance
 from src.application.use_cases.referral.commands.rewards import (
     AssignReferralRewards,
@@ -62,6 +72,7 @@ from src.core.enums import (
     PurchaseType,
     Role,
     SystemNotificationType,
+    TransactionFulfillmentStatus,
     TransactionStatus,
 )
 from src.core.exceptions import PurchaseError, TransactionNotRetryableError
@@ -70,6 +81,9 @@ from src.core.utils.i18n_helpers import (
     i18n_format_device_limit,
     i18n_format_traffic_limit,
 )
+from src.core.utils.payment_methods import normalize_platega_payment_method
+
+FULFILLMENT_LEASE = timedelta(minutes=30)
 
 
 class CreateDefaultPaymentGateway(Interactor[None, None]):
@@ -142,6 +156,9 @@ class CreatePaymentDto:
     pricing: PriceDetailsDto
     purchase_type: PurchaseType
     gateway_type: PaymentGatewayType
+    provider_idempotency_key: Optional[str] = None
+    payment_operation_id: Optional[int] = None
+    return_url: Optional[str] = None
 
 
 class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
@@ -154,14 +171,18 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
         transaction_dao: TransactionDao,
         get_payment_gateway_instance: GetPaymentGatewayInstance,
         translator_hub: TranslatorHub,
+        payment_idempotency: PaymentIdempotencyService,
     ) -> None:
         self.uow = uow
         self.payment_gateway_dao = payment_gateway_dao
         self.transaction_dao = transaction_dao
         self.get_payment_gateway_instance = get_payment_gateway_instance
         self.translator_hub = translator_hub
+        self.payment_idempotency = payment_idempotency
 
-    async def _execute(self, actor: UserDto, data: CreatePaymentDto) -> PaymentResultDto:
+    async def _execute(  # noqa: C901
+        self, actor: UserDto, data: CreatePaymentDto
+    ) -> PaymentResultDto:
         gateway_instance = await self.get_payment_gateway_instance.system(data.gateway_type)
         i18n = self.translator_hub.get_translator_by_locale(actor.language)
 
@@ -169,11 +190,16 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
         details = i18n.get(
             "payment-invoice-description",
             purchase_type=data.purchase_type,
-            name=i18n.get(data.plan_snapshot.name),
+            name=i18n.get_or_raw(data.plan_snapshot.name),
             duration=i18n.get(key, **kw),
         )
 
-        if data.pricing.is_free:
+        operation_id = data.payment_operation_id
+        provider_key = data.provider_idempotency_key
+        if (operation_id is None) != (provider_key is None):
+            raise ValueError("Payment operation id and provider key must be supplied together")
+
+        if data.pricing.is_free and operation_id is None:
             async with self.uow:
                 existing = await self.transaction_dao.get_recent_pending(
                     user_id=actor.id,
@@ -188,26 +214,11 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
                     )
                     return PaymentResultDto(id=existing.payment_id, url=None)
 
-                transaction = TransactionDto(
-                    payment_id=uuid.uuid4(),
-                    user_id=actor.id,
-                    status=TransactionStatus.PENDING,
-                    purchase_type=data.purchase_type,
-                    gateway_type=gateway_instance.data.type,
-                    pricing=data.pricing,
-                    currency=gateway_instance.data.currency,
-                    plan_snapshot=data.plan_snapshot,
-                )
-                await self.transaction_dao.create(transaction)
-                await self.uow.commit()
-
-            logger.info(
-                f"Payment for user '{actor.remna_name}' not created because pricing is free"
-            )
-            return PaymentResultDto(id=transaction.payment_id, url=None)
-
+        deterministic_payment_id = (
+            UUID(provider_key) if data.pricing.is_free and provider_key else None
+        )
         transaction = TransactionDto(
-            payment_id=uuid.uuid4(),
+            payment_id=deterministic_payment_id or uuid.uuid4(),
             user_id=actor.id,
             status=TransactionStatus.PENDING,
             purchase_type=data.purchase_type,
@@ -222,17 +233,91 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
             plan_snapshot=data.plan_snapshot,
         )
 
-        async with self.uow:
-            payment: PaymentResultDto = await gateway_instance.handle_create_payment(
-                amount=data.pricing.final_amount,
-                details=details,
+        if data.pricing.is_free:
+            provider_request = {
+                "version": 1,
+                "kind": "LOCAL",
+                "payment_id": str(transaction.payment_id),
+            }
+            recovery_mode = PaymentOperationRecoveryMode.LOCAL
+            provider_owner_hash = None
+            replay_for = None
+        else:
+            provider_request = await gateway_instance.build_payment_request(
+                data.pricing.final_amount,
+                details,
+                return_url=data.return_url,
+            )
+            if data.gateway_type == PaymentGatewayType.YOOKASSA:
+                if operation_id is not None:
+                    provider_request["metadata"] = {
+                        "remnashop_operation_id": str(operation_id),
+                    }
+                recovery_mode = PaymentOperationRecoveryMode.YOOKASSA_REPLAY
+                provider_owner_hash = gateway_instance.payment_owner_fingerprint()
+                if not provider_owner_hash:
+                    raise RuntimeError("YooKassa owner fingerprint is unavailable")
+                replay_for = timedelta(hours=23)
+            else:
+                recovery_mode = PaymentOperationRecoveryMode.MANUAL_REQUIRED
+                provider_owner_hash = gateway_instance.payment_owner_fingerprint()
+                replay_for = None
+
+        if operation_id is not None:
+            await self.payment_idempotency.mark_processing(
+                operation_id,
+                gateway_type=data.gateway_type.value,
+                resolved_payment_snapshot=build_resolved_payment_snapshot(transaction),
+                provider_request_snapshot=provider_request,
+                provider_owner_hash=provider_owner_hash,
+                recovery_mode=recovery_mode,
+                provider_replay_for=replay_for,
             )
 
+        if data.pricing.is_free:
+            payment = PaymentResultDto(id=transaction.payment_id, url=None)
+        else:
+            payment = await gateway_instance.create_payment_from_request(
+                provider_request,
+                idempotency_key=provider_key or str(uuid.uuid4()),
+            )
             transaction.payment_id = payment.id
-            await self.transaction_dao.create(transaction)
+
+        if operation_id is not None:
+            await self.payment_idempotency.checkpoint_provider_result(
+                operation_id,
+                {
+                    "version": 1,
+                    "payment_id": str(payment.id),
+                    "payment_url": payment.url,
+                    "provider_status": "LOCAL" if data.pricing.is_free else payment.provider_status,
+                },
+            )
+            if not data.pricing.is_free and payment.provider_status in {"succeeded", "canceled"}:
+                raise RuntimeError(
+                    "Provider returned a terminal status before the local transaction existed"
+                )
+
+        async with self.uow:
+            created_transaction = await self.transaction_dao.create(transaction)
+            if operation_id is not None:
+                await self.payment_idempotency.link_transaction(
+                    operation_id,
+                    created_transaction.id,
+                )
+                if not data.pricing.is_free:
+                    await self.payment_idempotency.complete_in_current_transaction(
+                        operation_id,
+                        build_payment_response(created_transaction, payment_url=payment.url),
+                    )
             await self.uow.commit()
 
-        logger.info(f"Created transaction '{payment.id}' for user {actor.log}")
+        if data.pricing.is_free:
+            logger.info(
+                f"Payment for user '{actor.remna_name}' not created because pricing is free"
+            )
+        else:
+            logger.info(f"Created transaction '{payment.id}' for user {actor.log}")
         return payment
 
 
@@ -294,6 +379,13 @@ class ProcessPaymentDto:
     payment_id: UUID
     new_transaction_status: TransactionStatus
     gateway_type: PaymentGatewayType
+    selected_payment_method: Optional[str] = None
+
+
+class PaymentTransactionNotReadyError(Exception): ...
+
+
+class PaymentEventNotAppliedError(Exception): ...
 
 
 class ProcessPayment(Interactor[ProcessPaymentDto, None]):
@@ -323,15 +415,38 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
         self.assign_referral_rewards = assign_referral_rewards
         self.purchase_subscription = purchase_subscription
 
-    async def _execute(self, actor: UserDto, data: ProcessPaymentDto) -> None:
+    async def _execute(  # noqa: C901
+        self, actor: UserDto, data: ProcessPaymentDto
+    ) -> None:
         payment_id = data.payment_id
         new_status = data.new_transaction_status
+        fulfillment_token_hash: Optional[str] = None
+        manual_escalation: Optional[tuple[UserDto, TransactionDto]] = None
+        refund_notification: Optional[tuple[UserDto, TransactionDto]] = None
+        payment_method_conflict = False
 
         async with self.uow:
             transaction = await self.transaction_dao.get_by_payment_id(payment_id)
 
             if not transaction:
-                logger.critical(f"Transaction not found for '{payment_id}'")
+                if new_status in {
+                    TransactionStatus.COMPLETED,
+                    TransactionStatus.CANCELED,
+                    TransactionStatus.REFUNDED,
+                }:
+                    await self.transaction_dao.store_webhook_event(
+                        payment_id=payment_id,
+                        gateway_type=data.gateway_type,
+                        status=new_status,
+                        selected_payment_method=data.selected_payment_method,
+                    )
+                    await self.uow.commit()
+                    logger.warning(
+                        f"Stored early payment webhook for missing transaction '{payment_id}'"
+                    )
+                    raise PaymentTransactionNotReadyError
+                else:
+                    logger.critical(f"Transaction not found for '{payment_id}'")
                 return
 
             if transaction.gateway_type != data.gateway_type:
@@ -339,88 +454,375 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
                     f"Gateway mismatch for transaction '{payment_id}': "
                     f"expected '{transaction.gateway_type}', got '{data.gateway_type}'"
                 )
-                return
+                raise PaymentEventNotAppliedError("Payment gateway mismatch")
+
+            if data.selected_payment_method is not None:
+                if data.gateway_type != PaymentGatewayType.PLATEGA:
+                    raise PaymentEventNotAppliedError(
+                        "Payment method metadata is only valid for Platega"
+                    )
+                try:
+                    selected_payment_method = normalize_platega_payment_method(
+                        data.selected_payment_method
+                    )
+                except ValueError as exc:
+                    raise PaymentEventNotAppliedError(
+                        "Invalid Platega payment method metadata"
+                    ) from exc
+                if selected_payment_method is None:
+                    raise PaymentEventNotAppliedError("Empty Platega payment method metadata")
+                method_applied = await self.transaction_dao.set_payment_method_if_absent_or_equal(
+                    payment_id,
+                    payment_method=selected_payment_method,
+                )
+                if not method_applied:
+                    payment_method_conflict = True
+                    logger.critical(
+                        "Platega payment method metadata conflicts for '{}'",
+                        payment_id,
+                    )
+                else:
+                    transaction.payment_method = selected_payment_method
 
             user = await self.user_dao.get_by_id(transaction.user_id)
 
             if not user:
                 logger.critical(f"User not found for transaction '{payment_id}'")
-                return
+                raise PaymentEventNotAppliedError("Payment owner is unavailable")
 
             if new_status == TransactionStatus.CANCELED:
-                updated = await self.transaction_dao.transition_status(
-                    payment_id,
-                    TransactionStatus.CANCELED,
-                    (TransactionStatus.PENDING,),
-                )
+                updated = await self.transaction_dao.cancel_by_provider(payment_id)
                 if not updated:
+                    refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                    if refreshed is not None and (
+                        (
+                            refreshed.status == TransactionStatus.CANCELED
+                            and refreshed.cancellation_reason == "PROVIDER"
+                        )
+                        or refreshed.status == TransactionStatus.REFUNDED
+                    ):
+                        logger.info(
+                            f"Cancel event already terminal for '{payment_id}', "
+                            f"user '{user.remna_name}'"
+                        )
+                        if payment_method_conflict:
+                            raise PaymentEventNotAppliedError(
+                                "Platega payment method conflicts with transaction state"
+                            )
+                        return
                     logger.warning(
                         f"Cancel transition did not match for '{payment_id}', "
                         f"user '{user.remna_name}' — already transitioned"
                     )
-                    return
+                    raise PaymentEventNotAppliedError(
+                        "Cancel event conflicts with transaction state"
+                    )
                 await self.uow.commit()
                 logger.info(f"Payment canceled '{payment_id}' for user {user.log}")
+                if payment_method_conflict:
+                    raise PaymentEventNotAppliedError(
+                        "Platega payment method conflicts with transaction state"
+                    )
                 return
 
-            elif new_status == TransactionStatus.COMPLETED:
-                updated = await self.transaction_dao.transition_status(
+            if new_status == TransactionStatus.COMPLETED:
+                token = secrets.token_urlsafe(32)
+                fulfillment_token_hash = hashlib.sha256(
+                    f"remnashop:fulfillment:v1\0{token}".encode()
+                ).hexdigest()
+                claimed = await self.transaction_dao.claim_fulfillment(
                     payment_id,
-                    TransactionStatus.COMPLETED,
-                    (TransactionStatus.PENDING, TransactionStatus.FAILED),
+                    token_hash=fulfillment_token_hash,
+                    lease_for=FULFILLMENT_LEASE,
                 )
-                if not updated:
-                    logger.warning(
-                        f"Completed transition did not match for '{payment_id}', "
-                        f"user '{user.remna_name}' — already transitioned"
-                    )
-                    return
-                await self.uow.commit()
+                if claimed is None:
+                    refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                    if (
+                        refreshed is not None
+                        and refreshed.fulfillment_status == TransactionFulfillmentStatus.PROCESSING
+                    ):
+                        expired = await self.transaction_dao.expire_fulfillment(payment_id)
+                        if expired:
+                            manual_escalation = (user, refreshed)
+                            await self.uow.commit()
+                    elif (
+                        refreshed is not None
+                        and refreshed.fulfillment_status == TransactionFulfillmentStatus.SUCCEEDED
+                        and refreshed.fulfillment_completed_at is not None
+                    ):
+                        logger.info(
+                            f"Payment fulfillment already completed for '{payment_id}', "
+                            f"user '{user.remna_name}'"
+                        )
+                    elif (
+                        refreshed is not None
+                        and refreshed.fulfillment_status
+                        == TransactionFulfillmentStatus.MANUAL_REQUIRED
+                    ):
+                        logger.critical(
+                            f"Payment fulfillment requires manual review for '{payment_id}', "
+                            f"user '{user.remna_name}'"
+                        )
+                        raise PaymentEventNotAppliedError(
+                            "Success event requires manual fulfillment review"
+                        )
+                    elif refreshed is not None and refreshed.status == TransactionStatus.REFUNDED:
+                        logger.info(
+                            f"Success event superseded by refund for '{payment_id}', "
+                            f"user '{user.remna_name}'"
+                        )
+                        if payment_method_conflict:
+                            raise PaymentEventNotAppliedError(
+                                "Platega payment method conflicts with transaction state"
+                            )
+                        return
+                    else:
+                        logger.warning(
+                            f"Completed transition did not match for '{payment_id}', "
+                            f"user '{user.remna_name}' — already transitioned"
+                        )
+                    if manual_escalation is None and (
+                        refreshed is not None
+                        and refreshed.fulfillment_status
+                        in {
+                            TransactionFulfillmentStatus.PROCESSING,
+                            TransactionFulfillmentStatus.SUCCEEDED,
+                        }
+                    ):
+                        if payment_method_conflict:
+                            raise PaymentEventNotAppliedError(
+                                "Platega payment method conflicts with transaction state"
+                            )
+                        return
+                    if manual_escalation is None:
+                        raise PaymentEventNotAppliedError(
+                            "Success event conflicts with transaction state"
+                        )
+                else:
+                    transaction = claimed
+                    user = await self.user_dao.get_by_id(transaction.user_id)
+                    if user is None:
+                        raise RuntimeError("Claimed payment owner is unavailable")
+                    await self.uow.commit()
 
             elif new_status == TransactionStatus.REFUNDED:
-                updated = await self.transaction_dao.transition_status(
-                    payment_id,
-                    TransactionStatus.REFUNDED,
-                    (TransactionStatus.COMPLETED,),
-                )
+                updated = await self.transaction_dao.transition_refunded(payment_id)
                 if not updated:
-                    logger.warning(
-                        f"Refund transition did not match for '{payment_id}', "
-                        f"user '{user.remna_name}' — not in COMPLETED"
-                    )
-                    return
-                await self.uow.commit()
-                logger.warning(f"Payment refunded '{payment_id}' for user {user.log}")
-                await self.notifier.notify_admins(
-                    MessagePayloadDto(
-                        i18n_key="event-payment.refunded",
-                        i18n_kwargs={
-                            "payment_id": str(payment_id),
-                            "gateway_type": transaction.gateway_type,
-                            "final_amount": transaction.pricing.final_amount,
-                            "original_amount": transaction.pricing.original_amount,
-                            "discount_percent": transaction.pricing.discount_percent,
-                            "currency": transaction.currency.symbol,
-                            "telegram_id": user.telegram_id or 0,
-                            "username": user.username or 0,
-                            "name": user.name,
-                            "email": user.email,
-                        },
-                    )
-                )
-                # Subscription revocation is a separate task (out of scope here)
-                return
+                    manual = await self.transaction_dao.mark_refund_manual_required(payment_id)
+                    if manual:
+                        refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                        if refreshed is None:
+                            raise RuntimeError("Refunded transaction disappeared")
+                        if (
+                            refreshed.fulfillment_status
+                            == TransactionFulfillmentStatus.MANUAL_REQUIRED
+                        ):
+                            manual_escalation = (user, refreshed)
+                        else:
+                            refund_notification = (user, refreshed)
+                        await self.uow.commit()
+                    else:
+                        refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                        if refreshed is not None and refreshed.status == TransactionStatus.REFUNDED:
+                            if (
+                                refreshed.fulfillment_status
+                                == TransactionFulfillmentStatus.MANUAL_REQUIRED
+                                and refreshed.fulfillment_alerted_at is None
+                            ):
+                                manual_escalation = (user, refreshed)
+                            else:
+                                refund_notification = (user, refreshed)
+                            await self.uow.commit()
+                        else:
+                            logger.warning(
+                                f"Refund transition did not match for '{payment_id}', "
+                                f"user '{user.remna_name}' — fulfillment is not proven"
+                            )
+                            raise PaymentEventNotAppliedError(
+                                "Refund event conflicts with transaction state"
+                            )
+                else:
+                    await self.uow.commit()
+                    logger.warning(f"Payment refunded '{payment_id}' for user {user.log}")
+                    refund_notification = (user, updated)
 
             else:
                 logger.warning(
                     f"Received unhandled transaction status '{new_status}' "
                     f"for payment '{payment_id}', user '{user.remna_name}'"
                 )
-                return
+                raise PaymentEventNotAppliedError("Unhandled payment event status")
 
-        # UoW closed cleanly; purchase_subscription will open its own UoW
-        await self._handle_success(user, transaction)
+        if manual_escalation is not None:
+            await self._notify_ambiguous_fulfillment(*manual_escalation)
+            if payment_method_conflict:
+                raise PaymentEventNotAppliedError(
+                    "Platega payment method conflicts with transaction state"
+                )
+            return
+
+        if refund_notification is not None:
+            await self._notify_refund(*refund_notification)
+            if payment_method_conflict:
+                raise PaymentEventNotAppliedError(
+                    "Platega payment method conflicts with transaction state"
+                )
+            return
+
+        if fulfillment_token_hash is None:
+            raise RuntimeError("Payment fulfillment token was not established")
+
+        # The external subscription operation is intentionally outside the claim
+        # transaction. The durable PROCESSING state prevents an ambiguous retry.
+        try:
+            await self._handle_success(user, transaction)
+        except Exception as exc:
+            async with self.uow:
+                marked_manual = await self.transaction_dao.mark_fulfillment_manual_required(
+                    payment_id,
+                    token_hash=fulfillment_token_hash,
+                    error_code="FULFILLMENT_SIDE_EFFECT_FAILED",
+                )
+                if not marked_manual:
+                    refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                    if (
+                        refreshed is None
+                        or refreshed.fulfillment_status
+                        != TransactionFulfillmentStatus.MANUAL_REQUIRED
+                    ):
+                        raise RuntimeError(
+                            "Payment fulfillment failure could not be fenced"
+                        ) from exc
+                await self.uow.commit()
+            raise
+        async with self.uow:
+            marked = await self.transaction_dao.complete_fulfillment(
+                payment_id,
+                token_hash=fulfillment_token_hash,
+            )
+            if not marked:
+                refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                if (
+                    refreshed is not None
+                    and refreshed.status == TransactionStatus.REFUNDED
+                    and refreshed.fulfillment_status
+                    in {
+                        TransactionFulfillmentStatus.PROCESSING,
+                        TransactionFulfillmentStatus.MANUAL_REQUIRED,
+                    }
+                    and refreshed.fulfillment_completed_at is None
+                ):
+                    finalized = await self.transaction_dao.mark_fulfillment_manual_required(
+                        payment_id,
+                        token_hash=fulfillment_token_hash,
+                        error_code="REFUND_DURING_COMPLETED_SIDE_EFFECT",
+                    )
+                    if not finalized:
+                        raise RuntimeError(
+                            "Refunded payment fulfillment could not release its fence"
+                        )
+                    refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                    if refreshed is None:
+                        raise RuntimeError("Refunded payment fulfillment disappeared")
+                    manual_escalation = (user, refreshed)
+                elif (
+                    refreshed is not None
+                    and refreshed.fulfillment_token_hash == fulfillment_token_hash
+                    and refreshed.fulfillment_status
+                    in {
+                        TransactionFulfillmentStatus.PROCESSING,
+                        TransactionFulfillmentStatus.MANUAL_REQUIRED,
+                    }
+                    and refreshed.fulfillment_completed_at is None
+                ):
+                    finalized = await self.transaction_dao.mark_fulfillment_manual_required(
+                        payment_id,
+                        token_hash=fulfillment_token_hash,
+                        error_code="FULFILLMENT_RESULT_AFTER_LEASE",
+                    )
+                    if not finalized:
+                        raise RuntimeError(
+                            "Expired payment fulfillment could not preserve its fence"
+                        )
+                    refreshed = await self.transaction_dao.get_by_payment_id(payment_id)
+                    if refreshed is None:
+                        raise RuntimeError("Expired payment fulfillment disappeared")
+                    manual_escalation = (user, refreshed)
+                if manual_escalation is None and (
+                    refreshed is None
+                    or refreshed.fulfillment_status != TransactionFulfillmentStatus.SUCCEEDED
+                    or refreshed.fulfillment_completed_at is None
+                ):
+                    raise RuntimeError("Payment fulfillment proof could not be persisted")
+            await self.uow.commit()
+        if manual_escalation is not None:
+            await self._notify_ambiguous_fulfillment(*manual_escalation)
+            if payment_method_conflict:
+                raise PaymentEventNotAppliedError(
+                    "Platega payment method conflicts with transaction state"
+                )
+            return
         logger.info(f"Payment succeeded '{payment_id}' for user {user.log}")
+        if payment_method_conflict:
+            raise PaymentEventNotAppliedError(
+                "Platega payment method conflicts with transaction state"
+            )
+
+    async def _notify_refund(
+        self,
+        user: UserDto,
+        transaction: TransactionDto,
+    ) -> None:
+        await self.notifier.notify_admins(
+            MessagePayloadDto(
+                i18n_key="event-payment.refunded",
+                i18n_kwargs={
+                    "payment_id": str(transaction.payment_id),
+                    "gateway_type": transaction.gateway_type,
+                    "final_amount": transaction.pricing.final_amount,
+                    "original_amount": transaction.pricing.original_amount,
+                    "discount_percent": transaction.pricing.discount_percent,
+                    "currency": transaction.currency.symbol,
+                    "telegram_id": user.telegram_id or 0,
+                    "username": user.username or 0,
+                    "name": user.name,
+                    "email": user.email,
+                },
+            )
+        )
+        # Subscription revocation is a separate task (out of scope here).
+
+    async def _notify_ambiguous_fulfillment(
+        self,
+        user: UserDto,
+        transaction: TransactionDto,
+    ) -> None:
+        logger.critical(
+            f"Payment fulfillment lease expired without proof for "
+            f"'{transaction.payment_id}', user '{user.remna_name}'"
+        )
+        await self.notifier.notify_system(
+            MessagePayloadDto(
+                i18n_key="event-payment.purchase-failed",
+                i18n_kwargs={
+                    "payment_id": str(transaction.payment_id),
+                    "gateway_type": transaction.gateway_type,
+                    "final_amount": transaction.pricing.final_amount,
+                    "original_amount": transaction.pricing.original_amount,
+                    "discount_percent": transaction.pricing.discount_percent,
+                    "currency": transaction.currency.symbol,
+                    "telegram_id": user.telegram_id or 0,
+                    "username": user.username or 0,
+                    "name": user.name,
+                    "email": user.email,
+                },
+            ),
+            roles=[Role.OWNER, Role.DEV],
+            notification_type=SystemNotificationType.SYSTEM,
+        )
+        async with self.uow:
+            await self.transaction_dao.mark_fulfillment_alerted(transaction.payment_id)
+            await self.uow.commit()
 
     async def _handle_success(self, user: UserDto, transaction: TransactionDto) -> None:
         if transaction.is_test:
@@ -446,13 +848,14 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
             original_amount=transaction.pricing.original_amount,
             currency=transaction.currency.symbol,
             #
-            plan_name=(transaction.plan_snapshot.name, {}),
+            # Plan names are operator-owned display text, not Fluent keys.
+            plan_name=transaction.plan_snapshot.name,
             plan_type=transaction.plan_snapshot.type,
             plan_traffic_limit=i18n_format_traffic_limit(transaction.plan_snapshot.traffic_limit),
             plan_device_limit=i18n_format_device_limit(transaction.plan_snapshot.device_limit),
             plan_duration=i18n_format_days(transaction.plan_snapshot.duration),
             #
-            previous_plan_name=(old_plan.name, {}) if old_plan else "N/A",
+            previous_plan_name=old_plan.name if old_plan else "N/A",
             previous_plan_type={
                 "key": "plan-type",
                 "plan_type": old_plan.type if old_plan else "N/A",
@@ -475,11 +878,6 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
                 f"Failed to process purchase for user '{user.remna_name}', "
                 f"transaction '{transaction.payment_id}'"
             )
-            async with self.uow:  # fresh UoW, no nesting
-                await self.transaction_dao.update_status(
-                    transaction.payment_id, TransactionStatus.FAILED
-                )
-                await self.uow.commit()
             await self.notifier.notify_system(
                 MessagePayloadDto(
                     i18n_key="event-payment.purchase-failed",
@@ -506,35 +904,10 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
         await self.event_publisher.publish(event)
 
         if not transaction.pricing.is_free:
-            # The purchase is already COMPLETED and committed. Referral rewards are
-            # best-effort: their failure must not break the successful purchase nor
-            # leave the transaction in a non-terminal state for retry. Isolate it.
-            try:
-                await self.assign_referral_rewards.system(
-                    AssignReferralRewardsDto(user, transaction)
-                )
-            except Exception:
-                logger.exception(
-                    f"Referral reward assignment failed for user '{user.remna_name}', "
-                    f"transaction '{transaction.payment_id}' — purchase succeeded"
-                )
-                await self.notifier.notify_admins(
-                    MessagePayloadDto(
-                        i18n_key="event-payment.referral-failed",
-                        i18n_kwargs={
-                            "payment_id": str(transaction.payment_id),
-                            "gateway_type": transaction.gateway_type,
-                            "final_amount": transaction.pricing.final_amount,
-                            "original_amount": transaction.pricing.original_amount,
-                            "discount_percent": transaction.pricing.discount_percent,
-                            "currency": transaction.currency.symbol,
-                            "telegram_id": user.telegram_id or 0,
-                            "username": user.username or 0,
-                            "name": user.name,
-                            "email": user.email,
-                        },
-                    )
-                )
+            # Persist immutable reward intents while this transaction still owns the
+            # fulfillment fence. Issuance is asynchronous and begins only after the
+            # source transaction is durably SUCCEEDED.
+            await self.assign_referral_rewards.system(AssignReferralRewardsDto(user, transaction))
 
         if user.telegram_id is not None:
             await self.redirect.to_success_payment(user.telegram_id, transaction.purchase_type)

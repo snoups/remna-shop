@@ -22,10 +22,12 @@ from src.core.enums import (
     PurchaseType,
     ReferralAccrualStrategy,
     ReferralLevel,
+    ReferralRewardState,
     ReferralRewardStrategy,
     ReferralRewardType,
     Role,
     SubscriptionStatus,
+    TransactionFulfillmentStatus,
     TransactionStatus,
 )
 
@@ -43,6 +45,10 @@ mapper_registry = registry(
         PaymentGatewayType: Enum(PaymentGatewayType, name="payment_gateway_type"),
         PurchaseType: Enum(PurchaseType, name="purchase_type"),
         TransactionStatus: Enum(TransactionStatus, name="transaction_status"),
+        TransactionFulfillmentStatus: Enum(
+            TransactionFulfillmentStatus,
+            name="transaction_fulfillment_status",
+        ),
         SubscriptionStatus: Enum(SubscriptionStatus, name="subscription_status"),
         TrafficLimitStrategy: Enum(TrafficLimitStrategy, name="plan_traffic_limit_strategy"),
         PlanAvailability: Enum(PlanAvailability, name="plan_availability"),
@@ -53,6 +59,7 @@ mapper_registry = registry(
         ReferralAccrualStrategy: Enum(ReferralAccrualStrategy, name="referral_accrual_strategy"),
         ReferralLevel: Enum(ReferralLevel, name="referral_level"),
         ReferralRewardStrategy: Enum(ReferralRewardStrategy, name="referral_reward_strategy"),
+        ReferralRewardState: Enum(ReferralRewardState, name="referral_reward_state"),
         ReferralRewardType: Enum(ReferralRewardType, name="referral_reward_type"),
         PromocodeRewardType: Enum(PromocodeRewardType, name="promocode_reward_type"),
         PromocodeAvailability: Enum(PromocodeAvailability, name="promocode_availability"),

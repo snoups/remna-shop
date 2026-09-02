@@ -39,7 +39,9 @@ async def handle_inline_query(
 
     logger.info(f"{user.log} Sent inline query {INLINE_QUERY_INVITE}")
 
-    result_id = hashlib.md5(inline_query.query.strip().encode()).hexdigest()
+    result_id = hashlib.md5(
+        inline_query.query.strip().encode(), usedforsecurity=False
+    ).hexdigest()
     referral_url = await bot_service.get_referral_url(user.referral_code)
     bot_name = await bot_service.get_my_name()
 

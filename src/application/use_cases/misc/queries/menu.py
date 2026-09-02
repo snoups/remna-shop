@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from src.application.common import BotService, Interactor, TranslatorRunner
@@ -58,8 +58,9 @@ class GetMenuData(Interactor[None, GetMenuDataResultDto]):
                 or (current_subscription is not None and current_subscription.is_active)
             )
             if button.is_active and role_ok and sub_ok:
-                button.text = self.i18n.get(button.text)
-                custom_buttons.append(button)
+                custom_buttons.append(
+                    replace(button, text=self.i18n.get_or_raw(button.text))
+                )
 
         return GetMenuDataResultDto(
             is_referral_enabled=is_referral_enabled,

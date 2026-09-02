@@ -85,6 +85,9 @@ services:
     container_name: "remnashop-local"
     hostname: remnashop
     <<: [*build, *common, *logging, *env]
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 2m
 
     ports:
       - 127.0.0.1:5000:${APP_PORT:-5000}
@@ -100,6 +103,11 @@ services:
     container_name: "remnashop-taskiq-worker"
     hostname: remnashop-taskiq-worker
     <<: [*build, *common, *logging, *env]
+    init: true
+    stop_signal: SIGTERM
+    # Taskiq acknowledges on receipt and then drains running tasks on TERM.
+    # Give long-running imports, broadcasts and backups time to finish.
+    stop_grace_period: 10m
 
     command: taskiq worker src.infrastructure.taskiq.worker:worker
       --workers 1 --ack-type when_received --tasks-pattern src/infrastructure/taskiq/tasks/*.py -fsd
@@ -114,6 +122,11 @@ services:
     container_name: "remnashop-taskiq-scheduler"
     hostname: remnashop-taskiq-scheduler
     <<: [*build, *common, *logging, *env]
+    init: true
+    # Taskiq's scheduler CLI has no TERM shutdown hook. asyncio.run converts
+    # INT into cancellation, then Taskiq closes its broker and schedule sources.
+    stop_signal: SIGINT
+    stop_grace_period: 30s
 
     command: taskiq scheduler src.infrastructure.taskiq.scheduler:scheduler
       --tasks-pattern src/infrastructure/taskiq/tasks/*.py -fsd

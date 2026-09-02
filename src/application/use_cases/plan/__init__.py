@@ -18,6 +18,7 @@ from .commands.order import DeletePlan, MoveDurationUp, MovePlanUp
 from .commands.squads import SanitizePlanSquads
 from .exchange import ExportPlans, ParsePlansImport
 from .queries.match import MatchPlan
+from .queries.renewal import GetRenewalPlanContext
 from .queries.squads import CheckSquadsAvailable
 
 PLAN_USE_CASES: Final[tuple[type[Interactor], ...]] = (
@@ -37,6 +38,7 @@ PLAN_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     UpdatePlanType,
     ParsePlansImport,
     ExportPlans,
+    GetRenewalPlanContext,
     MatchPlan,
     ToggleUserPlanAccess,
     MoveDurationUp,

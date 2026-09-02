@@ -29,6 +29,18 @@ x-env: &env
 
 
 services:
+  remnashop-migration:
+    container_name: "remnashop-migration"
+    hostname: remnashop-migration
+    <<: [*build, *logging, *env]
+    restart: "no"
+    command: ["./docker-migrate.sh"]
+    networks:
+      - remnawave-network
+    depends_on:
+      remnashop-db:
+        condition: service_healthy
+
   remnashop-db:
     image: postgres:17
     container_name: "remnashop-db"
@@ -83,11 +95,16 @@ services:
     container_name: "remnashop"
     hostname: remnashop
     <<: [*build, *common, *logging, *env]
+    init: true
+    stop_signal: SIGTERM
+    stop_grace_period: 2m
 
     ports:
       - 127.0.0.1:5000:${APP_PORT:-5000}
 
     depends_on:
+        remnashop-migration:
+          condition: service_completed_successfully
         remnashop-db:
           condition: service_healthy
         remnashop-redis:
@@ -98,12 +115,19 @@ services:
     container_name: "remnashop-taskiq-worker"
     hostname: remnashop-taskiq-worker
     <<: [*build, *common, *logging, *env]
+    init: true
+    stop_signal: SIGTERM
+    # Taskiq acknowledges on receipt and then drains running tasks on TERM.
+    # Give long-running imports, broadcasts and backups time to finish.
+    stop_grace_period: 10m
 
     command: >
         taskiq worker src.infrastructure.taskiq.worker:worker
         --workers 1 --ack-type when_received --tasks-pattern src/infrastructure/taskiq/tasks/*.py -fsd
 
     depends_on:
+        remnashop-migration:
+          condition: service_completed_successfully
         remnashop-redis:
           condition: service_healthy
         remnashop-db:
@@ -114,12 +138,19 @@ services:
     container_name: "remnashop-taskiq-scheduler"
     hostname: remnashop-taskiq-scheduler
     <<: [*build, *common, *logging, *env]
+    init: true
+    # Taskiq's scheduler CLI has no TERM shutdown hook. asyncio.run converts
+    # INT into cancellation, then Taskiq closes its broker and schedule sources.
+    stop_signal: SIGINT
+    stop_grace_period: 30s
 
     command: >
         taskiq scheduler src.infrastructure.taskiq.scheduler:scheduler
         --tasks-pattern src/infrastructure/taskiq/tasks/*.py -fsd
 
     depends_on:
+        remnashop-migration:
+          condition: service_completed_successfully
         remnashop-redis:
           condition: service_healthy
         remnashop-db:

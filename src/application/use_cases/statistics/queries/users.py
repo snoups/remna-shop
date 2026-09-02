@@ -82,7 +82,8 @@ class GetUserStatistics(Interactor[int, UserStatisticsDto]):
         if not user:
             raise ValueError(f"User '{user_id}' not found")
 
-        assert user.created_at is not None
+        if user.created_at is None:
+            raise RuntimeError("A persisted user must have a creation timestamp")
         last_payment_at, payment_amounts = await self.transaction_dao.get_user_payment_stats(
             user.id
         )

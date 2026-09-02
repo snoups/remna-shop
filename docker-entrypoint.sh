@@ -61,16 +61,6 @@ fi
 echo "Asset initialization complete"
 
 
-echo "Migrating database"
-
-if ! alembic -c src/infrastructure/database/alembic.ini upgrade head; then
-    echo "Database migration failed! Exiting container..."
-    exit 1
-fi
-
-echo "Migrations deployed successfully"
-
-
 if [ "$UVICORN_RELOAD_ENABLED" = "true" ]; then
     echo "Uvicorn will run with reload enabled"
     UVICORN_RELOAD_ARGS="--reload --reload-dir /opt/remnashop/src --reload-dir /opt/remnashop/assets --reload-include *.ftl"

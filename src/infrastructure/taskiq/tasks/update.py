@@ -4,9 +4,10 @@ import orjson
 from adaptix import Retort
 from dishka.integrations.taskiq import FromDishka, inject
 from loguru import logger
-from packaging.version import Version
+from packaging.version import InvalidVersion, Version
 from redis.asyncio import Redis
 
+from src.__version__ import __version__
 from src.application.common import EventPublisher
 from src.application.events import BotUpdateEvent
 from src.core.config import AppConfig
@@ -14,6 +15,31 @@ from src.infrastructure.redis.keys import LatestNotifiedVersionKey
 from src.infrastructure.taskiq.broker import broker
 
 GITHUB_RELEASE_URL: Final[str] = "https://api.github.com/repos/snoups/remnashop/releases/latest"
+
+
+def _parse_version_tag(value: str) -> tuple[str, Version] | None:
+    normalized = value.removeprefix("v")
+    try:
+        return normalized, Version(normalized)
+    except InvalidVersion:
+        return None
+
+
+def _resolve_local_version(build_tag: str) -> tuple[str, Version] | None:
+    parsed = _parse_version_tag(build_tag)
+    if parsed is not None:
+        return parsed
+
+    fallback = _parse_version_tag(__version__)
+    if fallback is None:
+        logger.warning("Local build tag and application version are invalid, skipping update check")
+        return None
+
+    logger.warning(
+        "Local build tag is not a valid version, falling back to application version: "
+        f"'{build_tag}' -> '{fallback[0]}'"
+    )
+    return fallback
 
 
 @broker.task(schedule=[{"cron": "0 * * * *"}], retry_on_error=False)
@@ -28,11 +54,10 @@ async def check_bot_update(
         logger.debug("Local version is a development build, skipping update check")
         return
 
-    local_version = config.build.tag.replace("v", "") if config.build.tag else None
-
-    if not local_version:
-        logger.warning("Local version tag is missing in config, skipping update check")
+    parsed_local = _resolve_local_version(config.build.tag)
+    if parsed_local is None:
         return
+    local_version, lv = parsed_local
 
     import httpx  # noqa: PLC0415
 
@@ -50,9 +75,9 @@ async def check_bot_update(
             response.raise_for_status()
 
             data = orjson.loads(response.content)
-            remote_version = data.get("tag_name", "").replace("v", "")
+            remote_tag = data.get("tag_name", "")
 
-            if not remote_version:
+            if not remote_tag:
                 logger.error("Remote version tag not found in GitHub API response")
                 return
     except httpx.ConnectError as e:
@@ -65,8 +90,13 @@ async def check_bot_update(
         logger.warning(f"GitHub API returned error status: '{e}'")
         return
 
-    lv = Version(local_version)
-    rv = Version(remote_version)
+    parsed_remote = _parse_version_tag(remote_tag)
+    if parsed_remote is None:
+        logger.warning(
+            f"Remote release tag is not a valid version, skipping update check: '{remote_tag}'"
+        )
+        return
+    remote_version, rv = parsed_remote
 
     if rv <= lv:
         status = "up to date" if rv == lv else "ahead of remote"

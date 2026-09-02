@@ -39,6 +39,22 @@ class TranslatorRunnerImpl(TranslatorRunner):
 
         return processed_text
 
+    def get_or_raw(self, key_or_text: str, **kwargs: Any) -> str:
+        """Translate configured content while preserving intentional literal text.
+
+        Plan names, custom menu labels and already-rendered keyboard captions may be
+        either Fluent keys or operator-provided text.  Missing values in this path
+        are therefore data, not missing application translations.  Callers that
+        require a real Fluent key must continue to use :meth:`get`, which retains
+        the warning on a missing key.
+        """
+        translated_data = self._translate_values(self._sanitize_data(kwargs))
+        try:
+            text = self._get_translation(key_or_text, **translated_data)
+        except KeyNotFoundError:
+            text = key_or_text
+        return self._postprocess(text)
+
     def from_event(self, event: Any, **kwargs: Any) -> str:
         raw_name = getattr(event, "event_type", event.__class__.__name__)
         key = event_to_key(raw_name)

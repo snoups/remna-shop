@@ -239,7 +239,7 @@ class UpdateUserProfile(Interactor[UpdateUserProfileDto, UserDto]):
                 user.language = Locale(new_language)
                 changed = True
             else:
-                logger.warning(
+                logger.debug(
                     f"User '{user.remna_name}' language '{new_language}' is not supported, "
                     f"keeping current '{user.language}'"
                 )

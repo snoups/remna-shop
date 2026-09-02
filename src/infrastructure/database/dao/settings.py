@@ -63,6 +63,22 @@ class SettingsDaoImpl(SettingsDao, BaseDaoImpl):
         logger.debug("Global settings retrieved")
         return self._convert_to_dto(db_settings)
 
+    async def get_for_update(self) -> SettingsDto:
+        """Load the authoritative settings row and hold its transaction row lock.
+
+        This path intentionally bypasses Redis. ``populate_existing`` also refreshes
+        an instance already present in the SQLAlchemy identity map, so callers never
+        take a lock while continuing with a stale settings snapshot.
+        """
+        stmt = select(Settings).limit(1).with_for_update().execution_options(populate_existing=True)
+        db_settings = await self.session.scalar(stmt)
+
+        if not db_settings:
+            raise RuntimeError("Settings row is missing; default settings were not initialized")
+
+        logger.debug("Authoritative global settings retrieved for update")
+        return self._convert_to_dto(db_settings)
+
     @invalidate_cache(key_builder=SETTINGS_PREFIX)
     async def update(self, settings: SettingsDto) -> Optional[SettingsDto]:
         if not settings.changed_data:

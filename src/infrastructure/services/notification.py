@@ -77,6 +77,34 @@ from src.telegram.keyboards import (
 )
 from src.telegram.widgets import extract_color, extract_tg_emoji
 
+_DELETE_NOT_FOUND_ERRORS = (
+    "message to delete not found",
+    "message identifier is not specified",
+)
+_DELETE_NOT_ALLOWED_ERRORS = (
+    "message can't be deleted",
+    "message cannot be deleted",
+)
+_MARKUP_ALREADY_CLEAR_ERRORS = (
+    "message is not modified",
+    "message to edit not found",
+    "message can't be edited",
+)
+_UNREACHABLE_CHAT_ERRORS = (
+    "chat not found",
+    "user is deactivated",
+    "bot can't initiate conversation with a user",
+)
+
+
+def _is_unreachable_chat_error(error: Exception) -> bool:
+    if isinstance(error, (TelegramForbiddenError, TelegramNotFound)):
+        return True
+    if not isinstance(error, TelegramBadRequest):
+        return False
+    error_text = str(error).lower()
+    return any(message in error_text for message in _UNREACHABLE_CHAT_ERRORS)
+
 
 class NotificationService(Notifier):
     def __init__(
@@ -323,8 +351,29 @@ class NotificationService(Notifier):
         try:
             await self.bot.delete_message(chat_id=chat_id, message_id=message_id)
             logger.debug(f"Notification '{message_id}' for chat '{chat_id}' deleted")
+        except TelegramBadRequest as e:
+            error_text = str(e).lower()
+            if any(message in error_text for message in _DELETE_NOT_FOUND_ERRORS):
+                logger.debug(
+                    f"Notification '{message_id}' for chat '{chat_id}' is already absent"
+                )
+                return
+            if any(message in error_text for message in _DELETE_NOT_ALLOWED_ERRORS):
+                logger.debug(
+                    f"Notification '{message_id}' for chat '{chat_id}' is too old to delete; "
+                    "removing its keyboard"
+                )
+                await self._clear_reply_markup(chat_id, message_id)
+                return
+            logger.exception(f"Failed to delete notification '{message_id}'")
+            await self._clear_reply_markup(chat_id, message_id)
+        except (TelegramForbiddenError, TelegramNotFound):
+            logger.debug(
+                f"Notification '{message_id}' for chat '{chat_id}' cannot be accessed; "
+                "deletion considered complete"
+            )
         except Exception as e:
-            logger.error(f"Failed to delete notification '{message_id}': {e}")
+            logger.exception(f"Failed to delete notification '{message_id}': {e}")
             await self._clear_reply_markup(chat_id, message_id)
 
     async def _process_task(self, task: NotificationTaskDto) -> None:
@@ -418,10 +467,10 @@ class NotificationService(Notifier):
 
             return message
 
-        except TelegramForbiddenError:
-            logger.warning(f"Bot was blocked by user {user.log}")
-            return None
         except Exception as e:
+            if _is_unreachable_chat_error(e):
+                logger.info(f"Notification skipped because chat is unavailable for {user.log}")
+                return None
             logger.exception(f"Failed to send notification to {user.log}: {e}")
             raise
 
@@ -495,13 +544,15 @@ class NotificationService(Notifier):
         return builder.as_markup()
 
     def _translate_keyboard_text(self, keyboard: AnyKeyboard, locale: Locale) -> AnyKeyboard:
+        i18n = self.translator_hub.get_translator_by_locale(locale)
+
         if isinstance(keyboard, InlineKeyboardMarkup):
             i_rows = []
             for i_row in keyboard.inline_keyboard:
                 i_buttons = []
                 for i_btn in i_row:
                     btn_dict = i_btn.model_dump()
-                    translated = self._get_translated_text(locale, i_btn.text) or i_btn.text
+                    translated = i18n.get_or_raw(i_btn.text)
                     clean_text, emoji_id = extract_tg_emoji(translated)
                     clean_text, color = extract_color(clean_text)
                     btn_dict["text"] = clean_text
@@ -519,7 +570,7 @@ class NotificationService(Notifier):
                 r_buttons = []
                 for r_btn in r_row:
                     btn_dict = r_btn.model_dump()
-                    translated = self._get_translated_text(locale, r_btn.text) or r_btn.text
+                    translated = i18n.get_or_raw(r_btn.text)
                     clean_text, _ = extract_tg_emoji(translated)
                     btn_dict["text"], _ = extract_color(clean_text)
                     r_buttons.append(type(r_btn)(**btn_dict))
@@ -542,8 +593,20 @@ class NotificationService(Notifier):
                 reply_markup=None,
             )
             logger.debug(f"Keyboard removed from notification '{message_id}'")
+        except TelegramBadRequest as e:
+            error_text = str(e).lower()
+            if any(message in error_text for message in _MARKUP_ALREADY_CLEAR_ERRORS):
+                logger.debug(
+                    f"Keyboard for notification '{message_id}' is already absent or unavailable"
+                )
+                return
+            logger.exception(f"Failed to remove keyboard from '{message_id}'")
+        except (TelegramForbiddenError, TelegramNotFound):
+            logger.debug(
+                f"Keyboard for notification '{message_id}' cannot be accessed; cleanup complete"
+            )
         except Exception as e:
-            logger.error(f"Failed to remove keyboard from '{message_id}': {e}")
+            logger.exception(f"Failed to remove keyboard from '{message_id}': {e}")
 
     def _build_media(self, media: MediaDescriptorDto) -> Union[str, BufferedInputFile, FSInputFile]:
         if media.kind == "file_id":

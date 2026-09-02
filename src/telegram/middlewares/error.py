@@ -115,7 +115,8 @@ class ErrorMiddleware(EventTypedMiddleware):
                     )
 
         if is_context_loss:
-            return await handler(event, data)
+            logger.info(f"Recovered stale dialog context: {type(event.exception).__name__}")
+            return None
 
         error_event = ErrorEvent(
             **config.build.data,

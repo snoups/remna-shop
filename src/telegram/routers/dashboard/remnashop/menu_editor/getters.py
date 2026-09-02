@@ -23,7 +23,7 @@ async def menu_editor_getter(
     buttons = retort.dump(settings.menu.buttons, list[MenuButtonDto])
     dialog_manager.dialog_data["buttons"] = buttons
     return {
-        "buttons": [{**button, "text": i18n.get(button["text"])} for button in buttons],
+        "buttons": [{**button, "text": i18n.get_or_raw(button["text"])} for button in buttons],
     }
 
 
@@ -36,7 +36,7 @@ async def button_getter(
     button = dialog_manager.dialog_data["button"]
     return {
         **button,
-        "text": i18n.get(button["text"]),
+        "text": i18n.get_or_raw(button["text"]),
         "color": button.get("color") or "",
     }
 

@@ -51,24 +51,34 @@ async def _enqueue_payment_task(
         return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
-async def _sync_platega_payment_method(
-    gateway: BasePaymentGateway,
+async def _store_payment_event(
     payment_id: UUID,
+    payment_status: TransactionStatus,
+    gateway_enum: PaymentGatewayType,
+    gateway_type: str,
+    config: AppConfig,
+    event_publisher: EventPublisher,
     transaction_dao: TransactionDao,
     uow: UnitOfWork,
-) -> None:
-    if not isinstance(gateway, PlategaGateway) or gateway.selected_payment_method is None:
-        return
-
-    async with uow:
-        transaction = await transaction_dao.get_by_payment_id(payment_id)
-        if transaction is None:
-            logger.warning(f"Transaction '{payment_id}' not found for Platega payment method sync")
-            return
-
-        transaction.payment_method = gateway.selected_payment_method
-        await transaction_dao.update(transaction)
-        await uow.commit()
+    selected_payment_method: Optional[str] = None,
+    error_code: Optional[str] = None,
+) -> Optional[Response]:
+    try:
+        async with uow:
+            await transaction_dao.store_webhook_event(
+                payment_id=payment_id,
+                gateway_type=gateway_enum,
+                status=payment_status,
+                selected_payment_method=selected_payment_method,
+                error_code=error_code,
+            )
+            await uow.commit()
+        return None
+    except Exception as exc:
+        await uow.rollback()
+        logger.exception("Failed to persist validated payment webhook for '{}'", gateway_type)
+        await event_publisher.publish(ErrorEvent(**config.build.data, exception=exc))
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 async def _process_payment_webhook(
@@ -100,12 +110,28 @@ async def _process_payment_webhook(
         logger.exception(f"Error processing webhook for '{gateway_type}': {e}")
         error_event = ErrorEvent(**config.build.data, exception=e)
         await event_publisher.publish(error_event)
-        return await _build_response(gateway, request, gateway_type)
+        # Never acknowledge an unpersisted callback. A retryable response gives
+        # every provider a chance to redeliver after parser/configuration fixes.
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     if result is not None:
         payment_id, payment_status = result
-        if gateway_enum == PaymentGatewayType.PLATEGA:
-            await _sync_platega_payment_method(gateway, payment_id, transaction_dao, uow)
+        selected_payment_method = (
+            gateway.selected_payment_method if isinstance(gateway, PlategaGateway) else None
+        )
+        storage_error = await _store_payment_event(
+            payment_id,
+            payment_status,
+            gateway_enum,
+            gateway_type,
+            config,
+            event_publisher,
+            transaction_dao,
+            uow,
+            selected_payment_method,
+        )
+        if storage_error is not None:
+            return storage_error
         enqueue_error = await _enqueue_payment_task(
             payment_id, payment_status, gateway_enum, gateway_type, config, event_publisher
         )

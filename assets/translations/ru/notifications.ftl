@@ -192,6 +192,7 @@ ntf-blacklist =
     </blockquote>
 
 ntf-invite =
+    .web-link-unavailable = 🌐 Ссылка Clean Pay временно недоступна. Обновите раздел приглашений и попробуйте снова.
     .referral-reset = ✅ <i>Реферальная ссылка обновлена.</i>
 
 ntf-promocode =

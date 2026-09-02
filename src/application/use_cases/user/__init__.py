@@ -10,6 +10,7 @@ from .commands.blocking import (
     ToggleUserBlockedStatus,
     UnblockAllUsers,
 )
+from .commands.merge import MergeUsers
 from .commands.messaging import SendMessageToUser
 from .commands.profile_edit import (
     ChangeUserPoints,
@@ -50,6 +51,7 @@ USER_USE_CASES: Final[tuple[type[Interactor], ...]] = (
     ResetOwnReferralCode,
     ResetUserReferralCode,
     SendMessageToUser,
+    MergeUsers,
     GetAvailableTrial,
     GetAvailablePlanByCode,
     UpdateUserProfile,

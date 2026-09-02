@@ -10,7 +10,11 @@ from src.application.common import TranslatorRunner
 from src.application.common.dao import PaymentGatewayDao, PlanDao, SettingsDao, SubscriptionDao
 from src.application.dto import PaymentGatewayDto, PlanDto, PriceDetailsDto, TelegramUserDto
 from src.application.services import PricingService
-from src.application.use_cases.plan.queries.match import MatchPlan, MatchPlanDto
+from src.application.use_cases.plan.queries.match import (
+    MatchPlan,
+    MatchPlanDto,
+    resolve_renew_plan,
+)
 from src.application.use_cases.user.queries.plans import GetAvailablePlans
 from src.core.config import AppConfig
 from src.core.enums import PurchaseType
@@ -77,7 +81,13 @@ async def plan_getter(
             MatchPlanDto(plan_snapshot=current_subscription.plan_snapshot, plans=[plan])
         )
 
-        if matched_plan and not current_subscription.is_unlimited:
+        renewal_plan = resolve_renew_plan(
+            current_subscription.plan_snapshot,
+            [plan],
+            matched_plan,
+        ).plan
+
+        if renewal_plan and not current_subscription.is_unlimited:
             purchase_type = PurchaseType.RENEW
         else:
             purchase_type = PurchaseType.CHANGE
@@ -89,8 +99,8 @@ async def plan_getter(
 
     return {
         "plan_id": [plan.id],
-        "name": i18n.get(plan.name),
-        "description": i18n.get(plan.description) if plan.description else False,
+        "name": i18n.get_or_raw(plan.name),
+        "description": i18n.get_or_raw(plan.description) if plan.description else False,
         "purchase_type": purchase_type,
     }
 
@@ -108,7 +118,7 @@ async def plans_getter(
     formatted_plans = [
         {
             "id": plan.id,
-            "name": i18n.get(plan.name),
+            "name": i18n.get_or_raw(plan.name),
         }
         for plan in plans
     ]
@@ -157,8 +167,8 @@ async def duration_getter(
     plan_is_modified = 1 if dialog_manager.dialog_data.get("plan_is_modified", False) else 0
 
     return {
-        "plan": i18n.get(plan.name),
-        "description": i18n.get(plan.description) if plan.description else False,
+        "plan": i18n.get_or_raw(plan.name),
+        "description": i18n.get_or_raw(plan.description) if plan.description else False,
         "type": plan.type,
         "devices": i18n_format_device_limit(plan.device_limit),
         "traffic": i18n_format_traffic_limit(plan.traffic_limit),
@@ -219,8 +229,8 @@ async def payment_method_getter(
     plan_is_modified = 1 if dialog_manager.dialog_data.get("plan_is_modified", False) else 0
 
     return {
-        "plan": i18n.get(plan.name),
-        "description": i18n.get(plan.description) if plan.description else False,
+        "plan": i18n.get_or_raw(plan.name),
+        "description": i18n.get_or_raw(plan.description) if plan.description else False,
         "type": plan.type,
         "devices": i18n_format_device_limit(plan.device_limit),
         "traffic": i18n_format_traffic_limit(plan.traffic_limit),
@@ -279,8 +289,8 @@ async def confirm_getter(
 
     return {
         "purchase_type": purchase_type,
-        "plan": i18n.get(plan.name),
-        "description": i18n.get(plan.description) if plan.description else False,
+        "plan": i18n.get_or_raw(plan.name),
+        "description": i18n.get_or_raw(plan.description) if plan.description else False,
         "type": plan.type,
         "devices": i18n_format_device_limit(plan.device_limit),
         "traffic": i18n_format_traffic_limit(plan.traffic_limit),
@@ -347,7 +357,7 @@ async def success_payment_getter(
 
     return {
         "purchase_type": purchase_type,
-        "plan_name": i18n.get(subscription.plan_snapshot.name),
+        "plan_name": i18n.get_or_raw(subscription.plan_snapshot.name),
         "traffic_limit": i18n_format_traffic_limit(subscription.traffic_limit),
         "device_limit": i18n_format_device_limit(subscription.device_limit),
         "expire_time": i18n_format_expire_time(subscription.expire_at),

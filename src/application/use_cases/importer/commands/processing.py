@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
+from tempfile import TemporaryDirectory
 
 from loguru import logger
 
@@ -12,9 +12,9 @@ from src.application.use_cases.importer.queries.filters import SplitExportedUser
 from src.application.use_cases.importer.queries.xui import ExportUsersFromXui
 
 
-def _safe_tmp_path(file_name: str) -> Path:
-    safe_name = Path(file_name).name or f"import_{uuid4().hex}"
-    return Path("/tmp") / safe_name
+def _safe_tmp_path(directory: str, file_name: str) -> Path:
+    safe_name = Path(file_name).name or "import.json"
+    return Path(directory) / safe_name
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,10 @@ class ProcessImportFile(Interactor[ProcessImportFileDto, ProcessImportFileResult
         actor: UserDto,
         data: ProcessImportFileDto,
     ) -> ProcessImportFileResultDto:
-        local_file_path = _safe_tmp_path(data.file_name)
-        try:
+        # A private random directory prevents filename collisions and symlink
+        # attacks when multiple admins import identically named files.
+        with TemporaryDirectory(prefix="remnashop_import_") as temp_directory:
+            local_file_path = _safe_tmp_path(temp_directory, data.file_name)
             await self.file_downloader.download_to_path(data.file_id, local_file_path)
             logger.info(f"{actor.log} Downloaded file for processing: '{local_file_path}'")
 
@@ -65,6 +67,3 @@ class ProcessImportFile(Interactor[ProcessImportFileDto, ProcessImportFileResult
                 active_users=active,
                 expired_users=expired,
             )
-        finally:
-            if local_file_path.exists():
-                local_file_path.unlink()

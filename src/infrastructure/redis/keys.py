@@ -62,3 +62,33 @@ class RefreshTokenKey(StorageKey, prefix="refresh"):
 @dataclass(frozen=True)
 class UserTokensKey(StorageKey, prefix="user_tokens"):
     user_id: int
+
+
+@dataclass(frozen=True)
+class PasswordResetRequestKey(StorageKey, prefix="password_reset_request"):
+    identity_hash: str
+
+
+@dataclass(frozen=True)
+class PasswordResetAttemptsKey(StorageKey, prefix="password_reset_attempts"):
+    identity_hash: str
+
+
+@dataclass(frozen=True)
+class PasswordResetLockKey(StorageKey, prefix="password_reset_lock"):
+    identity_hash: str
+
+
+@dataclass(frozen=True)
+class EmailAuthRequestKey(StorageKey, prefix="email_auth_request"):
+    identity_hash: str
+
+
+@dataclass(frozen=True)
+class EmailAuthChallengeKey(StorageKey, prefix="email_auth_challenge"):
+    identity_hash: str
+
+
+@dataclass(frozen=True)
+class EmailAuthAttemptsKey(StorageKey, prefix="email_auth_attempts"):
+    identity_hash: str
